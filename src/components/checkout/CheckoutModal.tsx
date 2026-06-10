@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -20,7 +20,6 @@ import {
   AlertCircle,
   Loader2,
   X,
-  ArrowLeft,
   ShieldCheck,
   Truck,
   Package,
@@ -32,6 +31,7 @@ import {
   CardNumberElement,
   CardExpiryElement,
   CardCvcElement,
+  PaymentRequestButtonElement,
   useStripe,
   useElements,
 } from "@stripe/react-stripe-js";
@@ -40,6 +40,7 @@ import { createOrderAction } from "@/app/actions/orders";
 import {
   getStoredBundle,
   formatPrice,
+  CARD_DISCOUNT_CENTS,
   type Bundle,
 } from "@/components/checkout/OrderSummary";
 import { useMetaPixel } from "@/hooks/useMetaPixel";
@@ -93,7 +94,7 @@ interface FormData {
 function InlineOrderSummary({ bundle, isCard }: { bundle: Bundle; isCard: boolean }) {
   const subtotal = bundle.priceInCents;
   const iva = Math.round(subtotal * 0.21);
-  const discount = isCard ? 500 : 0; // 5€ discount for card
+  const discount = isCard ? 500 : 0;
   const total = Math.max(0, subtotal + iva - discount);
 
   return (
@@ -180,8 +181,20 @@ function FormInput({
   );
 }
 
+/** Shared address input class (mirrors FormInput styles). */
+const addrInputCls = (error?: string, success?: boolean) =>
+  cn(
+    "w-full h-11 px-4 rounded-lg border text-base outline-none transition-all",
+    "bg-white placeholder:text-gray-400",
+    error
+      ? "border-red-400 focus:border-red-500 focus:ring-2 focus:ring-red-100"
+      : success
+      ? "border-emerald-400 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+      : "border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+  );
+
 /* ═══════════════════════════════════════════════════════════════════════════ */
-/*  CARD FORM (inner, requires Elements)                                       */
+/*  CARD FORM (inner, requires Elements context)                               */
 /* ═══════════════════════════════════════════════════════════════════════════ */
 
 function CardFormInner({
@@ -198,6 +211,7 @@ function CardFormInner({
   const { trackPurchase } = useMetaPixel();
   const [submitting, setSubmitting] = useState(false);
 
+  // Stripe card field state
   const [cardErrors, setCardErrors] = useState<Partial<Record<CardField, string>>>({});
   const [cardComplete, setCardComplete] = useState<Record<CardField, boolean>>({
     number: false,
@@ -206,17 +220,160 @@ function CardFormInner({
   });
   const [cardFocus, setCardFocus] = useState<CardField | null>(null);
 
+  // Apple Pay / Google Pay payment request
+  const [paymentRequest, setPaymentRequest] = useState<any>(null);
+
+  // Mapbox AddressAutofill — dynamic import to avoid SSR errors
+  const [AddressAutofill, setAddressAutofill] = useState<React.ComponentType<any> | null>(null);
+  const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? "";
+
   const {
     register,
     handleSubmit,
     watch,
+    setValue,
+    trigger,
+    getValues,
     formState: { errors, touchedFields },
   } = useForm<FormData>({ mode: "onTouched" });
 
   const watched = watch();
-
   const inputValid = (field: keyof FormData) =>
     !!touchedFields[field] && !errors[field] && !!watched[field];
+
+  const totalCents = Math.max(0, bundle.priceInCents - CARD_DISCOUNT_CENTS);
+
+  // Load Mapbox AddressAutofill lazily
+  useEffect(() => {
+    if (!mapboxToken) {
+      console.warn("[Checkout] Falta NEXT_PUBLIC_MAPBOX_TOKEN en .env — autocompletado de dirección desactivado.");
+      return;
+    }
+    import("@mapbox/search-js-react").then((mod) => {
+      setAddressAutofill(() => mod.AddressAutofill);
+    });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Apple Pay / Google Pay setup
+  useEffect(() => {
+    if (!stripe) return;
+
+    const pr = stripe.paymentRequest({
+      country: "ES",
+      currency: "eur",
+      total: { label: "Tu pedido", amount: totalCents },
+      requestPayerName: true,
+      requestPayerEmail: true,
+    });
+
+    pr.canMakePayment().then((result) => {
+      if (result) setPaymentRequest(pr);
+    });
+
+    pr.on("paymentmethod", async (ev: any) => {
+      // Honeypot check
+      const formValues = getValues();
+      if (formValues._hp) {
+        ev.complete("fail");
+        return;
+      }
+
+      // Validate all form fields (shows inline errors if incomplete)
+      const isValid = await trigger();
+      if (!isValid) {
+        ev.complete("fail");
+        onError("Completa todos los campos del formulario antes de usar Apple Pay o Google Pay.");
+        return;
+      }
+
+      try {
+        // Create PaymentIntent on server
+        const intentRes = await fetch("/api/create-payment-intent", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ bundleId: bundle.id }),
+        });
+        const intentData = await intentRes.json();
+
+        if (!intentRes.ok || !intentData.clientSecret) {
+          ev.complete("fail");
+          onError(intentData.error ?? "Error al iniciar el pago.");
+          return;
+        }
+
+        // Confirm with Apple/Google Pay payment method
+        // handleActions: false — don't open 3DS dialog while native sheet is open
+        const { error: confirmError, paymentIntent } = await stripe.confirmCardPayment(
+          intentData.clientSecret,
+          { payment_method: ev.paymentMethod.id },
+          { handleActions: false }
+        );
+
+        if (confirmError) {
+          ev.complete("fail");
+          onError(confirmError.message ?? "El pago fue rechazado.");
+          return;
+        }
+
+        if (paymentIntent?.status === "requires_action") {
+          // Close native sheet first, then handle extra auth
+          ev.complete("success");
+          const { error: actionError } = await stripe.confirmCardPayment(intentData.clientSecret);
+          if (actionError) {
+            onError(actionError.message ?? "Se requiere autenticación adicional.");
+            return;
+          }
+        } else {
+          ev.complete("success");
+        }
+
+        // Use Apple/Google Pay payer info when available, fall back to form
+        const fullName = ev.payerName || formValues.fullName;
+        const email = ev.payerEmail || formValues.email;
+
+        // Save order in Supabase
+        const orderResult = await createOrderAction({
+          customerData: {
+            fullName,
+            email,
+            phone: formValues.phone.replace(/[\s\-]/g, ""),
+            address: formValues.address,
+            postalCode: formValues.postcode,
+            city: formValues.city,
+            province: formValues.province,
+          },
+          bundleId: bundle.id,
+          paymentMethod: "CARD",
+          stripePaymentIntentId: paymentIntent!.id,
+        });
+
+        if (!orderResult.success) {
+          onError(`El pago fue procesado. Guarda tu referencia: ${paymentIntent!.id}`);
+          return;
+        }
+
+        const names = fullName.split(" ");
+        trackPurchase({
+          orderId: orderResult.orderId ?? paymentIntent!.id,
+          orderNumber: orderResult.orderNumber ?? paymentIntent!.id,
+          value: totalCents / 100,
+          currency: "EUR",
+          items: [{ id: bundle.id, name: bundle.name, quantity: 1, price: bundle.priceInCents / 100 }],
+          email: email || undefined,
+          phone: formValues.phone.replace(/[\s\-]/g, ""),
+          firstName: names[0],
+          lastName: names.slice(1).join(" "),
+          city: formValues.city,
+          zip: formValues.postcode,
+        });
+
+        onSuccess();
+      } catch (e) {
+        ev.complete("fail");
+        onError(e instanceof Error ? e.message : "Error inesperado.");
+      }
+    });
+  }, [stripe]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const onSubmit = async (data: FormData) => {
     if (data._hp) return;
@@ -253,7 +410,6 @@ function CardFormInner({
 
       if (pmError) {
         onError(pmError.message ?? "Error al procesar la tarjeta.");
-        setSubmitting(false);
         return;
       }
 
@@ -266,7 +422,6 @@ function CardFormInner({
 
       if (!intentRes.ok || !intentData.clientSecret) {
         onError(intentData.error ?? "Error al iniciar el pago.");
-        setSubmitting(false);
         return;
       }
 
@@ -277,13 +432,11 @@ function CardFormInner({
 
       if (confirmError) {
         onError(confirmError.message ?? "El pago fue rechazado.");
-        setSubmitting(false);
         return;
       }
 
       if (paymentIntent?.status !== "succeeded") {
         onError("El pago no pudo completarse.");
-        setSubmitting(false);
         return;
       }
 
@@ -305,7 +458,6 @@ function CardFormInner({
 
       if (!orderResult.success) {
         onError(`El pago fue procesado. Guarda tu referencia: ${paymentIntent.id}`);
-        setSubmitting(false);
         return;
       }
 
@@ -343,15 +495,32 @@ function CardFormInner({
         : "border-gray-300"
     );
 
+  const onMapboxRetrieve = (res: any) => {
+    const f = res.features?.[0]?.properties;
+    if (!f) return;
+    if (f.address_line1) setValue("address", f.address_line1, { shouldValidate: true });
+    if (f.place) setValue("city", f.place, { shouldValidate: true });
+    if (f.postcode) setValue("postcode", f.postcode, { shouldValidate: true });
+    if (f.region) setValue("province", f.region, { shouldValidate: true });
+  };
+
   return (
     <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-5">
-      <input type="text" tabIndex={-1} aria-hidden="true" className="absolute opacity-0 h-0 w-0" {...register("_hp")} />
+      <input
+        type="text"
+        tabIndex={-1}
+        aria-hidden="true"
+        className="absolute opacity-0 h-0 w-0"
+        {...register("_hp")}
+      />
 
-      {/* Personal data */}
+      {/* ── Datos personales ─────────────────────────────────────────────────── */}
       <div className="space-y-4">
         <div className="flex items-center gap-2 pb-2 border-b border-gray-200">
           <Package className="w-4 h-4 text-gray-500" />
-          <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wide">Datos personales</h3>
+          <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wide">
+            Datos personales
+          </h3>
         </div>
 
         <FormInput
@@ -359,7 +528,10 @@ function CardFormInner({
           placeholder="María García López"
           error={errors.fullName?.message}
           success={inputValid("fullName")}
-          register={register("fullName", { required: "Obligatorio", minLength: { value: 2, message: "Mínimo 2 caracteres" } })}
+          register={register("fullName", {
+            required: "Obligatorio",
+            minLength: { value: 2, message: "Mínimo 2 caracteres" },
+          })}
           name="fullName"
           autoComplete="name"
         />
@@ -369,7 +541,10 @@ function CardFormInner({
           placeholder="maria@email.com"
           error={errors.email?.message}
           success={inputValid("email")}
-          register={register("email", { required: "Obligatorio", pattern: { value: EMAIL_RE, message: "Email no válido" } })}
+          register={register("email", {
+            required: "Obligatorio",
+            pattern: { value: EMAIL_RE, message: "Email no válido" },
+          })}
           name="email"
           type="email"
           autoComplete="email"
@@ -380,21 +555,56 @@ function CardFormInner({
           placeholder="612 345 678"
           error={errors.phone?.message}
           success={inputValid("phone")}
-          register={register("phone", { required: "Obligatorio", pattern: { value: PHONE_RE, message: "Teléfono no válido" } })}
+          register={register("phone", {
+            required: "Obligatorio",
+            pattern: { value: PHONE_RE, message: "Teléfono no válido" },
+          })}
           name="phone"
           type="tel"
           autoComplete="tel"
         />
 
-        <FormInput
-          label="Dirección"
-          placeholder="Calle Mayor 123, 2ºB"
-          error={errors.address?.message}
-          success={inputValid("address")}
-          register={register("address", { required: "Obligatorio", minLength: { value: 5, message: "Demasiado corta" } })}
-          name="address"
-          autoComplete="street-address"
-        />
+        {/* Address with Mapbox autofill */}
+        <div className="space-y-1.5">
+          <label className="text-sm font-semibold text-gray-800 block">Dirección</label>
+          <div className="relative">
+            {AddressAutofill && mapboxToken ? (
+              <AddressAutofill
+                accessToken={mapboxToken}
+                options={{ country: "es", language: "es" }}
+                onRetrieve={onMapboxRetrieve}
+              >
+                <input
+                  type="text"
+                  autoComplete="address-line1"
+                  placeholder="Calle Mayor 123, 2ºB"
+                  className={addrInputCls(errors.address?.message, inputValid("address"))}
+                  {...register("address", {
+                    required: "Obligatorio",
+                    minLength: { value: 5, message: "Demasiado corta" },
+                  })}
+                />
+              </AddressAutofill>
+            ) : (
+              <input
+                type="text"
+                autoComplete="street-address"
+                placeholder="Calle Mayor 123, 2ºB"
+                className={addrInputCls(errors.address?.message, inputValid("address"))}
+                {...register("address", {
+                  required: "Obligatorio",
+                  minLength: { value: 5, message: "Demasiado corta" },
+                })}
+              />
+            )}
+            {inputValid("address") && !errors.address && (
+              <CheckCircle2 className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-emerald-500" />
+            )}
+          </div>
+          {errors.address && (
+            <p className="text-xs text-red-500 font-medium">{errors.address.message}</p>
+          )}
+        </div>
 
         <div className="grid grid-cols-2 gap-3">
           <FormInput
@@ -402,7 +612,10 @@ function CardFormInner({
             placeholder="28001"
             error={errors.postcode?.message}
             success={inputValid("postcode")}
-            register={register("postcode", { required: "Obligatorio", pattern: { value: POSTCODE_RE, message: "5 dígitos" } })}
+            register={register("postcode", {
+              required: "Obligatorio",
+              pattern: { value: POSTCODE_RE, message: "5 dígitos" },
+            })}
             name="postcode"
             autoComplete="postal-code"
           />
@@ -428,19 +641,49 @@ function CardFormInner({
         />
       </div>
 
-      {/* Card data */}
+      {/* ── Apple Pay / Google Pay ────────────────────────────────────────────── */}
+      {paymentRequest && (
+        <div className="space-y-0">
+          <PaymentRequestButtonElement
+            options={{
+              paymentRequest,
+              style: {
+                paymentRequestButton: {
+                  type: "buy",
+                  theme: "dark",
+                  height: "48px",
+                },
+              },
+            }}
+            className="rounded-lg overflow-hidden"
+          />
+          <div className="flex items-center gap-3 pt-4">
+            <hr className="flex-1 border-gray-200" />
+            <span className="text-xs text-gray-400 whitespace-nowrap">
+              o pagar con tarjeta
+            </span>
+            <hr className="flex-1 border-gray-200" />
+          </div>
+        </div>
+      )}
+
+      {/* ── Datos de la tarjeta ───────────────────────────────────────────────── */}
       <div className="space-y-4">
         <div className="flex items-center gap-2 pb-2 border-b border-gray-200">
           <CreditCard className="w-4 h-4 text-gray-500" />
-          <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wide">Datos de la tarjeta</h3>
+          <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wide">
+            Datos de la tarjeta
+          </h3>
         </div>
 
         <div className="bg-gray-50 rounded-lg border border-gray-200 p-4 space-y-4">
           <div>
-            <label className="text-sm font-semibold text-gray-800 block mb-1.5">Número de tarjeta</label>
+            <label className="text-sm font-semibold text-gray-800 block mb-1.5">
+              Número de tarjeta
+            </label>
             <div className={cardWrap("number")}>
               <CardNumberElement
-                options={{ style: STRIPE_STYLE, placeholder: "1234 5678 9012 3456" }}
+                options={{ style: STRIPE_STYLE, showIcon: true }}
                 onChange={(e) => {
                   setCardComplete((p) => ({ ...p, number: e.complete }));
                   setCardErrors((p) => ({ ...p, number: e.error?.message }));
@@ -449,15 +692,19 @@ function CardFormInner({
                 onBlur={() => setCardFocus(null)}
               />
             </div>
-            {cardErrors.number && <p className="text-xs text-red-500 mt-1">{cardErrors.number}</p>}
+            {cardErrors.number && (
+              <p className="text-xs text-red-500 mt-1">{cardErrors.number}</p>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-sm font-semibold text-gray-800 block mb-1.5">Caducidad</label>
+              <label className="text-sm font-semibold text-gray-800 block mb-1.5">
+                Caducidad
+              </label>
               <div className={cardWrap("expiry")}>
                 <CardExpiryElement
-                  options={{ style: STRIPE_STYLE, placeholder: "MM / YY" }}
+                  options={{ style: STRIPE_STYLE }}
                   onChange={(e) => {
                     setCardComplete((p) => ({ ...p, expiry: e.complete }));
                     setCardErrors((p) => ({ ...p, expiry: e.error?.message }));
@@ -466,13 +713,15 @@ function CardFormInner({
                   onBlur={() => setCardFocus(null)}
                 />
               </div>
-              {cardErrors.expiry && <p className="text-xs text-red-500 mt-1">{cardErrors.expiry}</p>}
+              {cardErrors.expiry && (
+                <p className="text-xs text-red-500 mt-1">{cardErrors.expiry}</p>
+              )}
             </div>
             <div>
               <label className="text-sm font-semibold text-gray-800 block mb-1.5">CVC</label>
               <div className={cardWrap("cvc")}>
                 <CardCvcElement
-                  options={{ style: STRIPE_STYLE, placeholder: "123" }}
+                  options={{ style: STRIPE_STYLE }}
                   onChange={(e) => {
                     setCardComplete((p) => ({ ...p, cvc: e.complete }));
                     setCardErrors((p) => ({ ...p, cvc: e.error?.message }));
@@ -481,7 +730,9 @@ function CardFormInner({
                   onBlur={() => setCardFocus(null)}
                 />
               </div>
-              {cardErrors.cvc && <p className="text-xs text-red-500 mt-1">{cardErrors.cvc}</p>}
+              {cardErrors.cvc && (
+                <p className="text-xs text-red-500 mt-1">{cardErrors.cvc}</p>
+              )}
             </div>
           </div>
         </div>
@@ -500,14 +751,13 @@ function CardFormInner({
         ) : (
           <>
             <Lock className="w-5 h-5 mr-2" />
-            Confirmar pago
+            Pagar — {formatPrice(totalCents)}
           </>
         )}
       </Button>
     </form>
   );
 }
-
 
 /* ═══════════════════════════════════════════════════════════════════════════ */
 /*  COD FORM                                                                   */
@@ -525,17 +775,38 @@ function CodForm({
   const { trackPurchase } = useMetaPixel();
   const [submitting, setSubmitting] = useState(false);
 
+  // Mapbox AddressAutofill — dynamic import
+  const [AddressAutofill, setAddressAutofill] = useState<React.ComponentType<any> | null>(null);
+  const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? "";
+
   const {
     register,
     handleSubmit,
     watch,
+    setValue,
     formState: { errors, touchedFields },
   } = useForm<FormData>({ mode: "onTouched" });
 
   const watched = watch();
-
   const inputValid = (field: keyof FormData) =>
     !!touchedFields[field] && !errors[field] && !!watched[field];
+
+  // Load Mapbox lazily
+  useEffect(() => {
+    if (!mapboxToken) return;
+    import("@mapbox/search-js-react").then((mod) => {
+      setAddressAutofill(() => mod.AddressAutofill);
+    });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const onMapboxRetrieve = (res: any) => {
+    const f = res.features?.[0]?.properties;
+    if (!f) return;
+    if (f.address_line1) setValue("address", f.address_line1, { shouldValidate: true });
+    if (f.place) setValue("city", f.place, { shouldValidate: true });
+    if (f.postcode) setValue("postcode", f.postcode, { shouldValidate: true });
+    if (f.region) setValue("province", f.region, { shouldValidate: true });
+  };
 
   const onSubmit = async (data: FormData) => {
     if (data._hp) return;
@@ -560,7 +831,6 @@ function CodForm({
 
       if (!result.success) {
         onError(result.error ?? "Error al crear el pedido.");
-        setSubmitting(false);
         return;
       }
 
@@ -589,13 +859,21 @@ function CodForm({
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-5">
-      <input type="text" tabIndex={-1} aria-hidden="true" className="absolute opacity-0 h-0 w-0" {...register("_hp")} />
+      <input
+        type="text"
+        tabIndex={-1}
+        aria-hidden="true"
+        className="absolute opacity-0 h-0 w-0"
+        {...register("_hp")}
+      />
 
-      {/* Personal data */}
+      {/* ── Datos de envío ────────────────────────────────────────────────────── */}
       <div className="space-y-4">
         <div className="flex items-center gap-2 pb-2 border-b border-gray-200">
           <Package className="w-4 h-4 text-gray-500" />
-          <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wide">Datos de envío</h3>
+          <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wide">
+            Datos de envío
+          </h3>
         </div>
 
         <FormInput
@@ -603,7 +881,10 @@ function CodForm({
           placeholder="María García López"
           error={errors.fullName?.message}
           success={inputValid("fullName")}
-          register={register("fullName", { required: "Obligatorio", minLength: { value: 2, message: "Mínimo 2 caracteres" } })}
+          register={register("fullName", {
+            required: "Obligatorio",
+            minLength: { value: 2, message: "Mínimo 2 caracteres" },
+          })}
           name="fullName"
           autoComplete="name"
         />
@@ -613,7 +894,10 @@ function CodForm({
           placeholder="maria@email.com"
           error={errors.email?.message}
           success={inputValid("email")}
-          register={register("email", { required: "Obligatorio", pattern: { value: EMAIL_RE, message: "Email no válido" } })}
+          register={register("email", {
+            required: "Obligatorio",
+            pattern: { value: EMAIL_RE, message: "Email no válido" },
+          })}
           name="email"
           type="email"
           autoComplete="email"
@@ -624,21 +908,56 @@ function CodForm({
           placeholder="612 345 678"
           error={errors.phone?.message}
           success={inputValid("phone")}
-          register={register("phone", { required: "Obligatorio", pattern: { value: PHONE_RE, message: "Teléfono no válido" } })}
+          register={register("phone", {
+            required: "Obligatorio",
+            pattern: { value: PHONE_RE, message: "Teléfono no válido" },
+          })}
           name="phone"
           type="tel"
           autoComplete="tel"
         />
 
-        <FormInput
-          label="Dirección"
-          placeholder="Calle Mayor 123, 2ºB"
-          error={errors.address?.message}
-          success={inputValid("address")}
-          register={register("address", { required: "Obligatorio", minLength: { value: 5, message: "Demasiado corta" } })}
-          name="address"
-          autoComplete="street-address"
-        />
+        {/* Address with Mapbox autofill */}
+        <div className="space-y-1.5">
+          <label className="text-sm font-semibold text-gray-800 block">Dirección</label>
+          <div className="relative">
+            {AddressAutofill && mapboxToken ? (
+              <AddressAutofill
+                accessToken={mapboxToken}
+                options={{ country: "es", language: "es" }}
+                onRetrieve={onMapboxRetrieve}
+              >
+                <input
+                  type="text"
+                  autoComplete="address-line1"
+                  placeholder="Calle Mayor 123, 2ºB"
+                  className={addrInputCls(errors.address?.message, inputValid("address"))}
+                  {...register("address", {
+                    required: "Obligatorio",
+                    minLength: { value: 5, message: "Demasiado corta" },
+                  })}
+                />
+              </AddressAutofill>
+            ) : (
+              <input
+                type="text"
+                autoComplete="street-address"
+                placeholder="Calle Mayor 123, 2ºB"
+                className={addrInputCls(errors.address?.message, inputValid("address"))}
+                {...register("address", {
+                  required: "Obligatorio",
+                  minLength: { value: 5, message: "Demasiado corta" },
+                })}
+              />
+            )}
+            {inputValid("address") && !errors.address && (
+              <CheckCircle2 className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-emerald-500" />
+            )}
+          </div>
+          {errors.address && (
+            <p className="text-xs text-red-500 font-medium">{errors.address.message}</p>
+          )}
+        </div>
 
         <div className="grid grid-cols-2 gap-3">
           <FormInput
@@ -646,7 +965,10 @@ function CodForm({
             placeholder="28001"
             error={errors.postcode?.message}
             success={inputValid("postcode")}
-            register={register("postcode", { required: "Obligatorio", pattern: { value: POSTCODE_RE, message: "5 dígitos" } })}
+            register={register("postcode", {
+              required: "Obligatorio",
+              pattern: { value: POSTCODE_RE, message: "5 dígitos" },
+            })}
             name="postcode"
             autoComplete="postal-code"
           />
@@ -704,7 +1026,6 @@ function CodForm({
     </form>
   );
 }
-
 
 /* ═══════════════════════════════════════════════════════════════════════════ */
 /*  SUCCESS SCREEN                                                             */
@@ -822,7 +1143,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ open, onOpenChange, metho
               {/* Order summary */}
               <InlineOrderSummary bundle={bundle} isCard={isCard} />
 
-              {/* Error */}
+              {/* Error banner */}
               <AnimatePresence>
                 {error && (
                   <motion.div
@@ -856,7 +1177,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ open, onOpenChange, metho
                 </motion.div>
               </AnimatePresence>
 
-              {/* Security */}
+              {/* Security strip */}
               <div className="flex flex-col items-center gap-2 pt-2 border-t border-gray-100">
                 <div className="flex items-center gap-1.5 text-emerald-600">
                   <ShieldCheck className="w-4 h-4" />
