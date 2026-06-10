@@ -1134,62 +1134,69 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ open, onOpenChange, metho
           </button>
         </div>
 
-        {/* Body */}
-        <div className="overflow-y-auto flex-1">
-          {submitted ? (
-            <SuccessScreen onClose={handleClose} />
-          ) : (
-            <div className="p-5 space-y-5">
-              {/* Order summary */}
-              <InlineOrderSummary bundle={bundle} isCard={isCard} />
+        {/*
+         * Elements lives HERE — outside every animated container.
+         * Stripe card iframes must never be inside a motion.div that
+         * animates opacity or transform: WebKit blocks pointer events
+         * to iframes when any ancestor has opacity < 1, and any CSS
+         * transform on an ancestor creates a stacking context that can
+         * bury iframes in other browsers.
+         */}
+        <Elements stripe={stripePromise}>
+          <div className="overflow-y-auto flex-1">
+            {submitted ? (
+              <SuccessScreen onClose={handleClose} />
+            ) : (
+              <div className="p-5 space-y-5">
+                {/* Order summary */}
+                <InlineOrderSummary bundle={bundle} isCard={isCard} />
 
-              {/* Error banner */}
-              <AnimatePresence>
-                {error && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: "auto" }}
-                    exit={{ opacity: 0, height: 0 }}
-                    className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 flex items-start gap-2"
-                  >
-                    <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
-                    <p className="text-xs text-red-700 leading-relaxed">{error}</p>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              {/* Form */}
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={method}
-                  initial={{ opacity: 0, x: isCard ? 20 : -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: isCard ? -20 : 20 }}
-                  transition={{ duration: 0.2 }}
-                >
-                  {isCard ? (
-                    <Elements stripe={stripePromise}>
-                      <CardFormInner bundle={bundle} onSuccess={handleSuccess} onError={handleError} />
-                    </Elements>
-                  ) : (
-                    <CodForm bundle={bundle} onSuccess={handleSuccess} onError={handleError} />
+                {/* Error banner */}
+                <AnimatePresence>
+                  {error && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: "auto" }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 flex items-start gap-2"
+                    >
+                      <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+                      <p className="text-xs text-red-700 leading-relaxed">{error}</p>
+                    </motion.div>
                   )}
-                </motion.div>
-              </AnimatePresence>
+                </AnimatePresence>
 
-              {/* Security strip */}
-              <div className="flex flex-col items-center gap-2 pt-2 border-t border-gray-100">
-                <div className="flex items-center gap-1.5 text-emerald-600">
-                  <ShieldCheck className="w-4 h-4" />
-                  <span className="text-xs font-bold">Pago 100% seguro · SSL encriptado</span>
+                {/* Form — animation only affects layout, never the Stripe iframes */}
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={method}
+                    initial={{ opacity: 0, x: isCard ? 20 : -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: isCard ? -20 : 20 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    {isCard ? (
+                      <CardFormInner bundle={bundle} onSuccess={handleSuccess} onError={handleError} />
+                    ) : (
+                      <CodForm bundle={bundle} onSuccess={handleSuccess} onError={handleError} />
+                    )}
+                  </motion.div>
+                </AnimatePresence>
+
+                {/* Security strip */}
+                <div className="flex flex-col items-center gap-2 pt-2 border-t border-gray-100">
+                  <div className="flex items-center gap-1.5 text-emerald-600">
+                    <ShieldCheck className="w-4 h-4" />
+                    <span className="text-xs font-bold">Pago 100% seguro · SSL encriptado</span>
+                  </div>
+                  <p className="text-[11px] text-gray-400 text-center leading-relaxed">
+                    Tus datos están protegidos. No compartimos tu información con terceros.
+                  </p>
                 </div>
-                <p className="text-[11px] text-gray-400 text-center leading-relaxed">
-                  Tus datos están protegidos. No compartimos tu información con terceros.
-                </p>
               </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        </Elements>
       </DialogContent>
     </Dialog>
   );
