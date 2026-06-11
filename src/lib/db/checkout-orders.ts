@@ -20,6 +20,7 @@ export interface CreateCheckoutOrderInput {
   subtotalEur: number
   couponDiscountEur: number
   totalEur: number
+  userId?: string
 }
 
 export interface CreateCheckoutOrderResult {
@@ -41,48 +42,28 @@ export async function createCheckoutOrder(
 
   const fullName = `${input.shippingAddress.firstName} ${input.shippingAddress.lastName}`.trim()
 
-  // 1. Upsert customer by phone
-  const { data: existing } = await db
-    .from("customers")
-    .select("id")
-    .eq("phone", input.shippingAddress.phone)
-    .maybeSingle()
+  // 1. Upsert perfil en profiles solo si el usuario está autenticado
+  let profileId: string | null = input.userId ?? null
 
-  let customerId: number
+  if (input.userId) {
+    try {
+      const nameParts = fullName.trim().split(/\s+/)
+      const nombre    = nameParts[0] ?? ''
+      const apellidos = nameParts.slice(1).join(' ') || null
 
-  if (existing) {
-    customerId = (existing as { id: number }).id
-    await db
-      .from("customers")
-      .update({
-        full_name: fullName,
-        email: input.email,
-        address: input.shippingAddress.address,
-        postal_code: input.shippingAddress.postalCode,
-        city: input.shippingAddress.city,
-        province: input.shippingAddress.province,
-      })
-      .eq("id", customerId)
-  } else {
-    const { data: newCustomer, error: customerErr } = await db
-      .from("customers")
-      .insert({
-        full_name: fullName,
-        phone: input.shippingAddress.phone,
-        email: input.email,
-        address: input.shippingAddress.address,
-        postal_code: input.shippingAddress.postalCode,
-        city: input.shippingAddress.city,
-        province: input.shippingAddress.province,
-        country: input.shippingAddress.country,
-      })
-      .select("id")
-      .single()
-
-    if (customerErr || !newCustomer) {
-      return { success: false, error: `Error al registrar cliente: ${customerErr?.message}` }
+      await db
+        .from("profiles")
+        .upsert({
+          id: input.userId,
+          nombre,
+          ...(apellidos ? { apellidos } : {}),
+          telefono: input.shippingAddress.phone,
+          email: input.email || null,
+        }, { onConflict: 'id' })
+    } catch (err) {
+      console.warn("[createCheckoutOrder] Error en profiles upsert:", err)
+      profileId = null
     }
-    customerId = (newCustomer as { id: number }).id
   }
 
   // 2. Generate order number
@@ -91,36 +72,35 @@ export async function createCheckoutOrder(
     return { success: false, error: `Error al generar número de pedido: ${numErr?.message}` }
   }
 
-  const shippingAddressStr =
-    input.shippingAddress.address +
-    (input.shippingAddress.apartment ? `, ${input.shippingAddress.apartment}` : "")
+  const shippingAddressStr = [
+    input.shippingAddress.address,
+    input.shippingAddress.apartment,
+    input.shippingAddress.postalCode,
+    input.shippingAddress.city,
+    input.shippingAddress.province,
+  ].filter(Boolean).join(', ')
 
   // 3. Insert order (PENDING, no PI yet)
   const { data: order, error: orderErr } = await db
     .from("orders")
     .insert({
-      order_number: orderNumber as string,
-      customer_id: customerId,
-      shipping_name: fullName,
-      shipping_phone: input.shippingAddress.phone,
-      shipping_address: shippingAddressStr,
-      shipping_postal: input.shippingAddress.postalCode,
-      shipping_city: input.shippingAddress.city,
-      shipping_province: input.shippingAddress.province,
-      shipping_country: input.shippingAddress.country,
-      subtotal: input.subtotalEur,
-      shipping_cost: input.shippingMethod.price,
-      total: input.totalEur,
-      payment_method: "CARD" as const,
-      payment_status: "PENDING" as const,
-      paid_at: null,
+      numero_pedido:            orderNumber as string,
+      user_id:                  profileId,
+      email_cliente:            input.email || null,
+      nombre_cliente:           fullName,
+      telefono_cliente:         input.shippingAddress.phone,
+      estado:                   'pendiente',
+      subtotal:                 input.subtotalEur,
+      descuento:                input.couponDiscountEur,
+      gastos_envio:             input.shippingMethod.price,
+      total:                    input.totalEur,
+      metodo_pago:              'card',
       stripe_payment_intent_id: null,
-      stripe_client_secret: null,
-      status: "PENDING" as const,
-      customer_notes: input.couponDiscountEur > 0
+      cupon_id:                 null,
+      direccion_envio:          shippingAddressStr,
+      notas_cliente:            input.couponDiscountEur > 0
         ? `descuento_cupon:${input.couponDiscountEur.toFixed(2)}`
         : null,
-      admin_notes: null,
     })
     .select("id")
     .single()
@@ -133,15 +113,14 @@ export async function createCheckoutOrder(
 
   // 4. Insert order items
   const itemRows = input.items.map((item) => ({
-    order_id: orderId,
-    product_id: item.productId,
-    product_title: item.productTitle,
-    bundle_id: null as number | null,
-    bundle_name: "",
-    quantity: item.quantity,
-    unit_price: item.unitPriceEur,
-    discount: item.discountEur,
-    subtotal: (item.unitPriceEur - item.discountEur) * item.quantity,
+    order_id:        orderId,
+    product_id:      item.productId,
+    variant_id:      null as number | null,
+    nombre_producto: item.productTitle,
+    imagen_producto: null as string | null,
+    cantidad:        item.quantity,
+    precio_unitario: item.unitPriceEur,
+    precio_total:    (item.unitPriceEur - item.discountEur) * item.quantity,
   }))
 
   const { error: itemsErr } = await db.from("order_items").insert(itemRows)

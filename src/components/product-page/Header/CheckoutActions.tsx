@@ -17,7 +17,7 @@ const CheckoutActions: React.FC<CheckoutActionsProps> = ({ data }) => {
   const [bundle, setBundle] = useState<Bundle | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [activeMethod, setActiveMethod] = useState<"cod" | "card">("cod");
-  const { trackInitiateCheckout } = useMetaPixel();
+  const { trackAddToCart, trackInitiateCheckout } = useMetaPixel();
 
   useEffect(() => {
     setBundle(getStoredBundle());
@@ -37,6 +37,7 @@ const CheckoutActions: React.FC<CheckoutActionsProps> = ({ data }) => {
     setBundle(b);
     setActiveMethod(method);
     setModalOpen(true);
+    trackAddToCart({ id: data.id, name: data.title, price: b.priceInCents / 100 });
     trackInitiateCheckout({
       value: b.priceInCents / 100,
       currency: "EUR",

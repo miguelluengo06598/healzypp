@@ -1,121 +1,213 @@
 "use client";
 
+import React, { useEffect, useState, useCallback } from "react";
 import { cn } from "@/lib/utils";
-import React, { useEffect, useState } from "react";
-import { BUNDLES, Bundle, calcSavings, calcDiscountPct, getBundlePriceEur } from "@/lib/bundles";
-import { motion } from "framer-motion";
+import {
+  BUNDLES,
+  Bundle,
+  calcSavings,
+  calcDiscountPct,
+  calcUnitPrice,
+  formatPriceEur,
+} from "@/lib/bundles";
 
 const BASE_UNIT_PRICE_EUR = 29.99;
-
 type BundleId = Bundle["id"];
+
+function getBundleTitle(bundle: Bundle): string {
+  if (bundle.id === 1) return "1 Bote — Pruébalo";
+  if (bundle.id === 2) return "2 Botes — Lo más vendido ⭐";
+  if (bundle.id === 3) return "3 Botes — Mejor precio 🏆";
+  return bundle.name;
+}
 
 const BundleSelection = () => {
   const [selected, setSelected] = useState<BundleId>(2);
+  const [bounceId, setBounceId] = useState<number | null>(null);
 
   useEffect(() => {
     localStorage.setItem("selectedBundle", JSON.stringify({ id: selected }));
   }, [selected]);
 
+  const handleSelect = useCallback((id: number) => {
+    setSelected(id);
+    setBounceId(id);
+    setTimeout(() => {
+      setBounceId((curr) => (curr === id ? null : curr));
+    }, 200);
+  }, []);
+
   return (
     <div className="flex flex-col">
-      <span className="text-sm sm:text-base text-black/60 mb-4">
-        Elige tu plan
-      </span>
+      <span className="text-sm text-black/60 mb-3">Elige tu plan</span>
 
       <div className="flex flex-col gap-3">
         {BUNDLES.map((bundle) => {
           const isSelected = selected === bundle.id;
+          const isPopular = bundle.popular;
           const savings = calcSavings(bundle);
           const discountPct = calcDiscountPct(bundle);
-          const unitTotal = (BASE_UNIT_PRICE_EUR * bundle.id).toFixed(2);
+          const strikePrice = (BASE_UNIT_PRICE_EUR * bundle.id)
+            .toFixed(2)
+            .replace(".", ",");
 
           return (
-            <motion.button
+            <div
               key={bundle.id}
-              type="button"
-              onClick={() => setSelected(bundle.id)}
-              whileTap={{ scale: 0.98 }}
-              className={cn(
-                "flex items-center justify-between px-5 py-4 rounded-[16px] transition-all border-2 text-left",
-                isSelected
-                  ? "bg-brand text-white border-brand shadow-[0_4px_16px_rgba(72,125,38,0.3)]"
-                  : "bg-[#F7F8F5] text-black border-transparent hover:border-brand/30 hover:bg-[#F0F4EC]"
-              )}
+              className="relative"
+              style={{ marginTop: isPopular ? 10 : undefined }}
             >
-              {/* Left: pack info */}
-              <div className="flex flex-col">
-                <span className="font-bold text-sm sm:text-base flex items-center gap-2">
-                  {bundle.name}
-                  {bundle.popular && (
-                    <span
-                      className={cn(
-                        "text-[10px] font-bold py-0.5 px-2 rounded-full tracking-wide",
-                        isSelected
-                          ? "bg-white/25 text-white"
-                          : "bg-brand text-white"
-                      )}
-                    >
-                      MÁS POPULAR
-                    </span>
+              {/* MÁS POPULAR badge */}
+              {isPopular && (
+                <span
+                  className={cn(
+                    "absolute left-4 z-10 text-[11px] font-bold uppercase tracking-wide rounded-[20px]",
+                    "py-[3px] px-[10px]",
+                    isSelected
+                      ? "bg-white text-[#2d6a2d]"
+                      : "bg-[#1a1a1a] text-white"
                   )}
+                  style={{ top: 0, transform: "translateY(-50%)" }}
+                >
+                  MÁS POPULAR
                 </span>
+              )}
 
-                {/* Price row */}
-                <div className="flex items-center gap-2 mt-1">
-                  <span className="font-extrabold text-base sm:text-lg">
-                    {bundle.price}
-                  </span>
-                  {bundle.id > 1 && (
-                    <span
-                      className={cn(
-                        "text-xs line-through",
-                        isSelected ? "text-white/60" : "text-black/40"
-                      )}
-                    >
-                      {unitTotal}€
-                    </span>
-                  )}
-                </div>
-
-                {/* Savings */}
-                {savings > 0 && (
-                  <span
-                    className={cn(
-                      "text-xs font-semibold mt-0.5",
-                      isSelected ? "text-white/90" : "text-brand"
-                    )}
-                  >
-                    Ahorras {savings.toFixed(2).replace(".", ",")}€
-                    {discountPct > 0 && ` (${discountPct}% dto.)`}
-                  </span>
-                )}
-                {savings === 0 && (
-                  <span
-                    className={cn(
-                      "text-xs mt-0.5",
-                      isSelected ? "text-white/70" : "text-black/40"
-                    )}
-                  >
-                    Precio base
-                  </span>
-                )}
-              </div>
-
-              {/* Right: radio circle */}
-              <div
+              <button
+                type="button"
+                onClick={() => handleSelect(bundle.id)}
+                aria-pressed={isSelected}
                 className={cn(
-                  "w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ml-3",
+                  "relative w-full text-left rounded-[16px] transition-all duration-150 ease-out",
+                  "focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2d6a2d] focus-visible:ring-offset-2",
                   isSelected
-                    ? "border-white bg-white"
-                    : "border-black/20"
+                    ? "border-[3px] border-[#1a4d1a] shadow-[0_4px_20px_rgba(45,106,45,0.35)]"
+                    : "border-[2.5px] border-[#d1d5db] bg-white shadow-[0_1px_4px_rgba(0,0,0,0.06)] hover:border-[#2d6a2d] hover:shadow-[0_2px_12px_rgba(45,106,45,0.12)]",
+                  bounceId === bundle.id && "animate-card-bounce"
                 )}
+                style={{
+                  padding: "16px 20px",
+                  background: isSelected
+                    ? "linear-gradient(135deg, #2d6a2d 0%, #3d8b3d 100%)"
+                    : undefined,
+                }}
               >
-                {isSelected && <div className="w-2.5 h-2.5 rounded-full bg-brand" />}
-              </div>
-            </motion.button>
+                <div className="flex items-center justify-between gap-3">
+                  {/* Izquierda: toda la info */}
+                  <div className="flex-1 min-w-0">
+                    <p
+                      className={cn(
+                        "leading-tight",
+                        isSelected ? "text-white" : "text-[#111827]"
+                      )}
+                      style={{ fontSize: 16, fontWeight: 600 }}
+                    >
+                      {getBundleTitle(bundle)}
+                    </p>
+
+                    <div className="flex items-baseline gap-2 mt-1.5">
+                      <span
+                        className={isSelected ? "text-white" : "text-[#111827]"}
+                        style={{
+                          fontSize: 24,
+                          fontWeight: 700,
+                          letterSpacing: "-0.02em",
+                        }}
+                      >
+                        {bundle.price}
+                      </span>
+                      {bundle.id > 1 && (
+                        <span
+                          className={cn(
+                            "line-through",
+                            isSelected ? "text-white/50" : "text-[#9ca3af]"
+                          )}
+                          style={{ fontSize: 14 }}
+                        >
+                          {strikePrice}€
+                        </span>
+                      )}
+                    </div>
+
+                    {savings > 0 ? (
+                      <>
+                        <p
+                          className={
+                            isSelected ? "text-[#bbf7d0]" : "text-[#2d6a2d]"
+                          }
+                          style={{
+                            fontSize: 13,
+                            fontWeight: 500,
+                            marginTop: 4,
+                          }}
+                        >
+                          ✦ Ahorras {formatPriceEur(savings)}€ · {discountPct}% dto.
+                        </p>
+                        <p
+                          className={
+                            isSelected ? "text-white/80" : "text-[#6b7280]"
+                          }
+                          style={{
+                            fontSize: 13,
+                            fontWeight: 500,
+                            marginTop: 2,
+                          }}
+                        >
+                          Solo {formatPriceEur(calcUnitPrice(bundle))}€/bote
+                        </p>
+                      </>
+                    ) : (
+                      <p
+                        className={
+                          isSelected ? "text-white/70" : "text-[#6b7280]"
+                        }
+                        style={{
+                          fontSize: 13,
+                          fontWeight: 400,
+                          marginTop: 4,
+                        }}
+                      >
+                        Precio base
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Derecha: radio button custom */}
+                  <div
+                    className={cn(
+                      "w-[22px] h-[22px] rounded-full border-[2.5px] flex items-center justify-center shrink-0 transition-colors duration-150",
+                      isSelected
+                        ? "border-white bg-white"
+                        : "border-[#d1d5db] bg-white"
+                    )}
+                  >
+                    <div
+                      className={cn(
+                        "w-[10px] h-[10px] rounded-full transition-transform duration-150",
+                        isSelected
+                          ? "bg-[#2d6a2d] scale-100"
+                          : "scale-0"
+                      )}
+                    />
+                  </div>
+                </div>
+              </button>
+            </div>
           );
         })}
       </div>
+
+      <style>{`
+        @keyframes card-bounce {
+          0% { transform: scale(1); }
+          30% { transform: scale(0.98); }
+          60% { transform: scale(1.01); }
+          100% { transform: scale(1); }
+        }
+        .animate-card-bounce {
+          animation: card-bounce 200ms ease-out;
+        }
+      `}</style>
     </div>
   );
 };

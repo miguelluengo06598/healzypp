@@ -8,7 +8,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { sendMetaCAPIEvent, hashForMeta } from '@/lib/meta-capi'
+import { sendMetaCAPIEvent, hashForMeta } from '@/lib/meta/capi'
 import { createServiceClient } from '@/lib/supabase'
 import { metaCapiRatelimit, getClientIp } from '@/lib/rate-limit'
 
@@ -39,17 +39,9 @@ const BodySchema = z.object({
 export async function POST(req: NextRequest) {
   // ── Rate limit: 100 eventos/minuto/IP ───────────────────────────────────────
   const ip = getClientIp(req)
-
-  let allowed = true
-  if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) {
-    console.warn('[meta/capi] Upstash Redis no configurado: rate limit desactivado')
-  } else {
-    const result = await metaCapiRatelimit.limit(ip)
-    allowed = result.success
-  }
-
+  const { success: allowed } = await metaCapiRatelimit.limit(ip)
   if (!allowed) {
-    return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 })
+    return NextResponse.json({ error: 'Demasiados intentos. Espera un momento.' }, { status: 429 })
   }
 
   // ── Parse body ──────────────────────────────────────────────────────────────

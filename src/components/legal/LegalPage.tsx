@@ -1,9 +1,9 @@
-import React from "react";
+﻿import React from "react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { integralCF } from "@/styles/fonts";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export interface LegalSection {
   title: string;
@@ -18,7 +18,7 @@ interface LegalPageProps {
   breadcrumb: { label: string; href: string }[];
 }
 
-// ─── Component ───────────────────────────────────────────────────────────────
+// â”€â”€â”€ Component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export default function LegalPage({
   title,
@@ -28,7 +28,7 @@ export default function LegalPage({
   breadcrumb,
 }: LegalPageProps) {
   return (
-    <main className="pb-20">
+    <main>
       <div className="max-w-frame mx-auto px-4 xl:px-0">
         {/* Top rule */}
         <hr className="h-[1px] border-t-black/10 mb-5 sm:mb-6" />
@@ -67,7 +67,7 @@ export default function LegalPage({
             </p>
           )}
           <p className="text-sm text-black/40 mt-4">
-            Última actualización:{" "}
+            Ãšltima actualizaciÃ³n:{" "}
             <span className="font-medium text-black/60">{lastUpdated}</span>
           </p>
         </div>
@@ -76,7 +76,7 @@ export default function LegalPage({
 
         {/* Two-column layout on large screens: TOC + content */}
         <div className="flex flex-col lg:flex-row gap-10 lg:gap-16 items-start">
-          {/* Table of contents — sticky on desktop */}
+          {/* Table of contents â€” sticky on desktop */}
           <aside className="hidden lg:block w-[240px] shrink-0 sticky top-8">
             <p className="text-xs font-medium uppercase tracking-widest text-black/40 mb-4">
               Contenido

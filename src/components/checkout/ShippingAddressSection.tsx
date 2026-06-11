@@ -166,6 +166,19 @@ export default function ShippingAddressSection({
             <AddressAutofill
               accessToken={mapboxToken}
               options={{ country: "es", language: "es" }}
+              popoverOptions={{
+                placement: "bottom-start",
+                flip: true,
+                offset: 5,
+              }}
+              theme={{
+                cssText: `
+                  .Results {
+                    z-index: 99999 !important;
+                    position: fixed !important;
+                  }
+                `,
+              }}
               onRetrieve={onRetrieve}
             >
               <input

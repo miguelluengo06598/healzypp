@@ -5,6 +5,8 @@ import { newArrivalsData, topSellingData } from "@/data/products"
 import { SHIPPING_OPTIONS, FREE_SHIPPING_THRESHOLD_EUR } from "@/lib/shipping"
 import { createCheckoutOrder, attachPaymentIntent } from "@/lib/db/checkout-orders"
 import { paymentIntentRatelimit, getClientIp } from "@/lib/rate-limit"
+import { getCurrentUserId } from "@/lib/supabase-server"
+import { createServiceClient } from "@/lib/supabase"
 import type { ShippingAddress, ShippingMethod } from "@/hooks/useCheckout"
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
@@ -98,7 +100,7 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  const { items, shippingAddress, shippingMethodId, email, couponDiscountEur } = parsed.data
+  const { items, shippingAddress, shippingMethodId, email, couponCode, couponDiscountEur } = parsed.data
 
   // Verify shipping method exists
   const shippingOption = SHIPPING_OPTIONS.find((o) => o.id === shippingMethodId)
@@ -141,8 +143,33 @@ export async function POST(req: NextRequest) {
       ? 0
       : shippingOption.basePrice
 
-  // Server-cap coupon discount — never more than subtotal
-  const safeCouponDiscount = Math.min(Math.max(0, couponDiscountEur), subtotalEur)
+  // W3: Revalidar cupón en servidor — nunca confiar en el importe del cliente
+  let safeCouponDiscount = 0
+  if (couponCode) {
+    try {
+      const db = createServiceClient()
+      const { data: couponData } = await (db as any)
+        .from('coupons')
+        .select('*')
+        .eq('code', couponCode.toUpperCase())
+        .eq('active', true)
+        .maybeSingle()
+
+      if (couponData) {
+        const isExpired = couponData.expires_at && new Date(couponData.expires_at) < new Date()
+        const isMaxed = couponData.max_uses !== null && couponData.current_uses >= couponData.max_uses
+        const meetsMin = couponData.minimum_order_eur === null || subtotalEur >= couponData.minimum_order_eur
+
+        if (!isExpired && !isMaxed && meetsMin) {
+          safeCouponDiscount = couponData.type === 'fixed'
+            ? Math.min(couponData.value, subtotalEur)
+            : Math.round(subtotalEur * couponData.value / 100 * 100) / 100
+        }
+      }
+    } catch (err) {
+      console.warn('[checkout/create-payment-intent] coupon validation error:', err)
+    }
+  }
 
   const totalEur = Math.max(0, subtotalEur - safeCouponDiscount + shippingCostEur)
   const totalCents = Math.round(totalEur * 100)
@@ -161,6 +188,7 @@ export async function POST(req: NextRequest) {
 
   try {
     // Create order in DB (PENDING — no PI ID yet)
+    const userId = (await getCurrentUserId()) ?? undefined
     const orderResult = await createCheckoutOrder({
       items: verifiedItems,
       email,
@@ -169,6 +197,7 @@ export async function POST(req: NextRequest) {
       subtotalEur,
       couponDiscountEur: safeCouponDiscount,
       totalEur,
+      userId,
     })
 
     if (!orderResult.success || !orderResult.orderId || !orderResult.orderNumber) {

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
@@ -13,6 +13,7 @@ import OrderSummary, {
   formatPrice,
 } from "@/components/checkout/OrderSummary";
 import { stripePromise } from "@/lib/stripe";
+import { createOrderAction } from "@/app/actions/orders";
 import { FaCheck, FaCheckCircle, FaLock } from "react-icons/fa";
 import { FaCircleXmark } from "react-icons/fa6";
 import PaymentIcons from "@/components/common/PaymentIcons";
@@ -25,6 +26,7 @@ import {
   CardNumberElement,
   CardExpiryElement,
   CardCvcElement,
+  PaymentRequestButtonElement,
   useStripe,
   useElements,
 } from "@stripe/react-stripe-js";
@@ -161,18 +163,19 @@ const cardWrapCls = (error?: string, focused?: boolean, success?: boolean) =>
 function CheckoutForm({
   bundle,
   totalCents,
+  clientSecret,
 }: {
   bundle: Bundle;
   totalCents: number;
+  clientSecret: string;
 }) {
   const stripe = useStripe();
   const elements = useElements();
   const router = useRouter();
-  const { trackPurchase } = useMetaPixel();
-
   const [submitting, setSubmitting] = useState(false);
   const [stripeError, setStripeError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
+  const orderCreatedRef = useRef(false);
 
   // Per-field Stripe state
   const [cardErrors, setCardErrors] = useState<
@@ -183,11 +186,15 @@ function CheckoutForm({
   >({ number: false, expiry: false, cvc: false });
   const [cardFocus, setCardFocus] = useState<CardField | null>(null);
 
+  // Apple Pay / Google Pay payment request
+  const [paymentRequest, setPaymentRequest] = useState<any>(null);
+
   const {
     register,
     handleSubmit,
     watch,
     setValue,
+    trigger,
     formState: { errors, touchedFields },
   } = useForm<FormValues>({ mode: "onTouched" });
 
@@ -202,6 +209,105 @@ function CheckoutForm({
       setAddressAutofill(() => mod.AddressAutofill);
     });
   }, []);
+
+  // Apple Pay / Google Pay setup
+  useEffect(() => {
+    if (!stripe || !clientSecret) return;
+
+    const pr = stripe.paymentRequest({
+      country: "ES",
+      currency: "eur",
+      total: { label: "Tu pedido", amount: totalCents },
+      requestPayerName: true,
+      requestPayerEmail: true,
+    });
+
+    pr.canMakePayment().then((result) => {
+      if (result) setPaymentRequest(pr);
+    });
+
+    pr.on("paymentmethod", async (ev: any) => {
+      const isValid = await trigger();
+      if (!isValid) {
+        ev.complete("fail");
+        setStripeError("Completa todos los campos del formulario antes de usar Apple Pay o Google Pay.");
+        return;
+      }
+
+      try {
+        const { error: confirmError, paymentIntent } = await stripe.confirmCardPayment(
+          clientSecret,
+          { payment_method: ev.paymentMethod.id },
+          { handleActions: false }
+        );
+
+        if (confirmError) {
+          ev.complete("fail");
+          setStripeError(confirmError.message ?? "El pago fue rechazado.");
+          return;
+        }
+
+        if (paymentIntent?.status === "requires_action") {
+          ev.complete("success");
+          const { error: actionError } = await stripe.confirmCardPayment(clientSecret);
+          if (actionError) {
+            setStripeError(actionError.message ?? "Se requiere autenticación adicional.");
+            return;
+          }
+        } else {
+          ev.complete("success");
+        }
+
+        const fullName = ev.payerName || `${watched.firstName} ${watched.lastName}`;
+        const email = ev.payerEmail || watched.email;
+
+        if (orderCreatedRef.current) return;
+        orderCreatedRef.current = true;
+
+        const orderResult = await createOrderAction({
+          customerData: {
+            fullName,
+            phone: watched.phone.replace(/[\s\-]/g, ""),
+            address: watched.address,
+            postalCode: watched.postcode,
+            city: watched.city,
+            province: watched.province,
+            email,
+          },
+          bundleId: bundle.id,
+          paymentMethod: "CARD",
+          stripePaymentIntentId: paymentIntent!.id,
+        });
+
+        if (!orderResult.success) {
+          orderCreatedRef.current = false;
+          setStripeError(`El pago fue procesado. Guarda tu referencia: ${paymentIntent!.id}`);
+          return;
+        }
+
+        try {
+          sessionStorage.setItem('healzyp_order', JSON.stringify({
+            orderNumber: orderResult.orderNumber ?? paymentIntent!.id,
+            email,
+            firstName: fullName.split(' ')[0],
+            paymentMethod: 'card',
+            items: [{ name: bundle.name, srcUrl: '/icons/favericonweb.png', quantity: 1, attributes: [], price: bundle.priceInCents / 100, discount: 0 }],
+            shippingAddress: { firstName: watched.firstName || fullName.split(' ')[0], lastName: watched.lastName || fullName.split(' ').slice(1).join(' '), address: watched.address || '', apartment: '', postalCode: watched.postcode || '', city: watched.city || '', province: watched.province || '', country: 'España' },
+            shippingMethod: { name: 'Envío gratuito', estimatedDays: '2-4 días laborables', price: 0 },
+            subtotalEur: bundle.priceInCents / 100,
+            shippingCostEur: 0,
+            couponDiscountEur: CARD_DISCOUNT_CENTS / 100,
+            totalEur: totalCents / 100,
+          }));
+        } catch {}
+        router.push('/order/confirmation');
+      } catch (e) {
+        ev.complete("fail");
+        orderCreatedRef.current = false;
+        setStripeError("Hubo un problema al procesar tu pedido. Inténtalo de nuevo.");
+      }
+    });
+  }, [stripe, clientSecret]);
 
   const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? "";
 
@@ -221,114 +327,93 @@ function CheckoutForm({
     setSubmitting(true);
     setStripeError(null);
 
-    // ── 1. Crear PaymentMethod con los datos de la tarjeta ──────────────────
-    const cardElement = elements.getElement(CardNumberElement)!;
-    const { paymentMethod, error: pmError } = await stripe.createPaymentMethod({
-      type: "card",
-      card: cardElement,
-      billing_details: {
-        name: `${data.firstName} ${data.lastName}`,
-        email: data.email,
-        phone: data.phone,
-        address: {
-          line1: data.address,
-          city: data.city,
-          state: data.province,
-          postal_code: data.postcode,
-          country: "ES",
-        },
-      },
-    });
-
-    if (pmError) {
-      setStripeError(pmError.message ?? "Error al procesar la tarjeta.");
-      setSubmitting(false);
-      return;
-    }
-
-    // ── 2. Pedir al servidor que cree el PaymentIntent ──────────────────────
-    const intentRes = await fetch("/api/create-payment-intent", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ bundleId: bundle.id }),
-    });
-
-    const intentData = await intentRes.json();
-
-    if (!intentRes.ok || !intentData.clientSecret) {
-      setStripeError(intentData.error ?? "Error al iniciar el pago.");
-      setSubmitting(false);
-      return;
-    }
-
-    // ── 3. Confirmar el cobro con Stripe ────────────────────────────────────
-    const { error: confirmError, paymentIntent } = await stripe.confirmCardPayment(
-      intentData.clientSecret,
-      { payment_method: paymentMethod.id }
-    );
-
-    if (confirmError) {
-      setStripeError(confirmError.message ?? "El pago fue rechazado.");
-      setSubmitting(false);
-      return;
-    }
-
-    if (paymentIntent?.status !== "succeeded") {
-      setStripeError("El pago no pudo completarse. Inténtalo de nuevo.");
-      setSubmitting(false);
-      return;
-    }
-
-    // ── 4. Pago confirmado por Stripe → crear la orden en base de datos ─────
-    const { createOrderAction } = await import("@/app/actions/orders");
-    const orderResult = await createOrderAction({
-      customerData: {
-        fullName: `${data.firstName} ${data.lastName}`,
-        phone: data.phone.replace(/[\s\-]/g, ""),
-        address: data.address,
-        postalCode: data.postcode,
-        city: data.city,
-        province: data.province,
-        email: data.email,
-      },
-      bundleId: bundle.id,
-      paymentMethod: "CARD",
-      stripePaymentIntentId: paymentIntent.id,
-    });
-
-    if (!orderResult.success) {
-      // El pago SÍ se procesó — avisar al cliente para que contacte soporte
-      setStripeError(
-        `El pago fue procesado pero hubo un error al registrar tu pedido (${orderResult.error ?? "error desconocido"}). Guarda tu referencia de pago: ${paymentIntent.id} y contáctanos.`
-      );
-      setSubmitting(false);
-      return;
-    }
-
-    setSubmitting(false);
-    setSubmitted(true);
-
-    // ── 5. Meta Pixel: Purchase ─────────────────────────────────────────────
-    trackPurchase({
-      orderId: orderResult.orderId ?? paymentIntent.id,
-      orderNumber: orderResult.orderNumber ?? paymentIntent.id,
-      value: totalCents / 100,
-      currency: 'EUR',
-      items: [
+    try {
+      // ── 1. Confirmar el cobro con Stripe ────────────────────────────────────
+      const cardElement = elements.getElement(CardNumberElement)!;
+      const { error: confirmError, paymentIntent } = await stripe.confirmCardPayment(
+        clientSecret,
         {
-          id: bundle.id,
-          name: bundle.name,
-          quantity: 1,
-          price: bundle.priceInCents / 100,
+          payment_method: {
+            card: cardElement,
+            billing_details: {
+              name: `${data.firstName} ${data.lastName}`,
+              email: data.email,
+              phone: data.phone,
+              address: {
+                line1: data.address,
+                city: data.city,
+                state: data.province,
+                postal_code: data.postcode,
+                country: "ES",
+              },
+            },
+          },
+        }
+      );
+
+      if (confirmError) {
+        setStripeError(confirmError.message ?? "El pago fue rechazado.");
+        setSubmitting(false);
+        return;
+      }
+
+      if (paymentIntent?.status !== "succeeded") {
+        setStripeError("El pago no pudo completarse. Inténtalo de nuevo.");
+        setSubmitting(false);
+        return;
+      }
+
+      // ── 4. Pago confirmado por Stripe → crear la orden en base de datos ─────
+      if (orderCreatedRef.current) { setSubmitting(false); return; }
+      orderCreatedRef.current = true;
+
+      const orderResult = await createOrderAction({
+        customerData: {
+          fullName: `${data.firstName} ${data.lastName}`,
+          phone: data.phone.replace(/[\s\-]/g, ""),
+          address: data.address,
+          postalCode: data.postcode,
+          city: data.city,
+          province: data.province,
+          email: data.email,
         },
-      ],
-      email: data.email,
-      phone: data.phone.replace(/[\s\-]/g, ''),
-      firstName: data.firstName,
-      lastName: data.lastName,
-      city: data.city,
-      zip: data.postcode,
-    });
+        bundleId: bundle.id,
+        paymentMethod: "CARD",
+        stripePaymentIntentId: paymentIntent.id,
+      });
+
+      if (!orderResult.success) {
+        orderCreatedRef.current = false;
+        // El pago SÍ se procesó — avisar al cliente para que contacte soporte
+        setStripeError(
+          `El pago fue procesado pero hubo un error al registrar tu pedido. Guarda tu referencia de pago: ${paymentIntent.id} y contáctanos.`
+        );
+        setSubmitting(false);
+        return;
+      }
+
+      // ── 5. Guardar en sessionStorage y redirigir a confirmación ────────────
+      try {
+        sessionStorage.setItem('healzyp_order', JSON.stringify({
+          orderNumber: orderResult.orderNumber ?? paymentIntent.id,
+          email: data.email,
+          firstName: data.firstName,
+          paymentMethod: 'card',
+          items: [{ name: bundle.name, srcUrl: '/icons/favericonweb.png', quantity: 1, attributes: [], price: bundle.priceInCents / 100, discount: 0 }],
+          shippingAddress: { firstName: data.firstName, lastName: data.lastName, address: data.address, apartment: '', postalCode: data.postcode, city: data.city, province: data.province, country: 'España' },
+          shippingMethod: { name: 'Envío gratuito', estimatedDays: '2-4 días laborables', price: 0 },
+          subtotalEur: bundle.priceInCents / 100,
+          shippingCostEur: 0,
+          couponDiscountEur: CARD_DISCOUNT_CENTS / 100,
+          totalEur: totalCents / 100,
+        }));
+      } catch {}
+      router.push('/order/confirmation');
+    } catch (e) {
+      console.error("[CheckoutForm] unexpected error:", e);
+      setStripeError("Hubo un problema al procesar tu pedido. Inténtalo de nuevo.");
+      setSubmitting(false);
+    }
   };
 
   // ── Success screen ──────────────────────────────────────────────────────────
@@ -496,6 +581,19 @@ function CheckoutForm({
               <AddressAutofill
                 accessToken={mapboxToken}
                 options={{ country: "es", language: "es" }}
+                popoverOptions={{
+                  placement: "bottom-start",
+                  flip: true,
+                  offset: 5,
+                }}
+                theme={{
+                  cssText: `
+                    .Results {
+                      z-index: 99999 !important;
+                      position: fixed !important;
+                    }
+                  `,
+                }}
                 onRetrieve={(res: any) => {
                   const f = res.features?.[0]?.properties;
                   if (!f) return;
@@ -629,8 +727,33 @@ function CheckoutForm({
           </span>
         </p>
 
-        {/* Card fields — identical visual style to all other inputs */}
+        {/* Apple Pay / Google Pay + Card fields */}
         <div className="flex flex-col gap-4">
+          {paymentRequest && (
+            <div className="space-y-0">
+              <PaymentRequestButtonElement
+                options={{
+                  paymentRequest,
+                  style: {
+                    paymentRequestButton: {
+                      type: "buy",
+                      theme: "dark",
+                      height: "48px",
+                    },
+                  },
+                }}
+                className="rounded-full overflow-hidden"
+              />
+              <div className="flex items-center gap-3 pt-4">
+                <hr className="flex-1 border-black/10" />
+                <span className="text-xs text-black/40 whitespace-nowrap">
+                  o pagar con tarjeta
+                </span>
+                <hr className="flex-1 border-black/10" />
+              </div>
+            </div>
+          )}
+
           <CardFieldWrapper label="Número de tarjeta" error={cardErrors.number}>
             <div
               className={cardWrapCls(
@@ -742,6 +865,8 @@ function CheckoutForm({
 export default function CardCheckoutPage() {
   const router = useRouter();
   const [bundle, setBundle] = useState<Bundle | null>(null);
+  const [clientSecret, setClientSecret] = useState<string | null>(null);
+  const [clientSecretLoading, setClientSecretLoading] = useState(false);
   const { trackInitiateCheckout } = useMetaPixel();
 
   useEffect(() => {
@@ -760,26 +885,31 @@ export default function CardCheckoutPage() {
         },
       ],
     });
+
+    if (b) {
+      setClientSecretLoading(true);
+      fetch("/api/create-payment-intent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bundleId: b.id }),
+      })
+        .then(async (res) => {
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "Error del servidor");
+          setClientSecret(data.clientSecret);
+        })
+        .catch(() => {
+          // Error handling is silent here; UI shows loading/error state
+        })
+        .finally(() => {
+          setClientSecretLoading(false);
+        });
+    }
   }, [trackInitiateCheckout]);
 
   if (!bundle) return null;
 
   const totalCents = Math.max(0, Math.round(bundle.priceInCents) - Math.round(CARD_DISCOUNT_CENTS));
-
-  // Individual card elements don't use the deferred-intent mode/amount/currency
-  // options — those are only required by PaymentElement.
-  const stripeOptions = {
-    appearance: {
-      theme: "flat" as const,
-      variables: {
-        fontFamily: "inherit",
-        fontSizeBase: "14px",
-        colorText: "#111111",
-        colorTextPlaceholder: "#9CA3AF",
-        colorDanger: "#ef4444",
-      },
-    },
-  };
 
   return (
     <main className="min-h-screen bg-[#F7F8F5]">
@@ -814,10 +944,22 @@ export default function CardCheckoutPage() {
           </div>
 
           {/* ── Form card ───────────────────────────────────────────────────── */}
-          {stripePromise ? (
+          {clientSecretLoading ? (
+            <div className="bg-white rounded-[24px] shadow-sm overflow-hidden p-6 md:p-8">
+              <div className="space-y-4">
+                <div className="animate-pulse h-12 bg-gray-100 rounded-full" />
+                <div className="animate-pulse h-12 bg-gray-100 rounded-full" />
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="animate-pulse h-12 bg-gray-100 rounded-full" />
+                  <div className="animate-pulse h-12 bg-gray-100 rounded-full" />
+                </div>
+                <div className="animate-pulse h-[52px] bg-gray-100 rounded-full" />
+              </div>
+            </div>
+          ) : stripePromise && clientSecret ? (
             <div className="bg-white rounded-[24px] shadow-sm overflow-hidden">
-              <Elements stripe={stripePromise} options={stripeOptions}>
-                <CheckoutForm bundle={bundle} totalCents={totalCents} />
+              <Elements stripe={stripePromise} options={{ clientSecret }}>
+                <CheckoutForm bundle={bundle} totalCents={totalCents} clientSecret={clientSecret} />
               </Elements>
             </div>
           ) : (

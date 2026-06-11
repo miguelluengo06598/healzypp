@@ -14,7 +14,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Star,
-  Check,
 } from "lucide-react";
 
 import {
@@ -217,7 +216,6 @@ const QuickProductPreviewModal: React.FC = () => {
 
   /* Bundle state — same as PDP */
   const [selectedBundleIdx, setSelectedBundleIdx] = useState(1); // default 2 packs (popular)
-  const [justAdded, setJustAdded] = useState(false);
 
   /* Color state (kept for products that have colors) */
   const [selectedColor, setSelectedColor] = useState(
@@ -229,7 +227,6 @@ const QuickProductPreviewModal: React.FC = () => {
     if (selectedProduct) {
       setSelectedBundleIdx(1);
       setSelectedColor(selectedProduct.colors?.[0]?.name ?? "");
-      setJustAdded(false);
     }
   }, [selectedProduct?.id]);
 
@@ -259,12 +256,7 @@ const QuickProductPreviewModal: React.FC = () => {
         quantity: 1,
       })
     );
-    setJustAdded(true);
-    const t = setTimeout(() => {
-      setJustAdded(false);
-      closePreview();
-    }, 1200);
-    return () => clearTimeout(t);
+    closePreview();
   }, [
     dispatch,
     selectedProduct,
@@ -528,24 +520,10 @@ const QuickProductPreviewModal: React.FC = () => {
               >
                 <Button
                   onClick={handleAddToCart}
-                  className={cn(
-                    "w-full h-11 rounded-full font-bold transition-all",
-                    justAdded
-                      ? "bg-green-600 hover:bg-green-700 text-white"
-                      : "bg-brand hover:bg-brand-hover text-white shadow-[0_4px_14px_rgba(72,125,38,0.35)]"
-                  )}
+                  className="w-full h-11 rounded-full font-bold transition-all bg-brand hover:bg-brand-hover text-white shadow-[0_4px_14px_rgba(72,125,38,0.35)]"
                 >
-                  {justAdded ? (
-                    <>
-                      <Check className="w-4 h-4 mr-2" />
-                      Añadido al carrito
-                    </>
-                  ) : (
-                    <>
-                      <ShoppingBag className="w-4 h-4 mr-2" />
-                      Añadir {selectedBundle.name}
-                    </>
-                  )}
+                  <ShoppingBag className="w-4 h-4 mr-2" />
+                  Añadir {selectedBundle.name}
                 </Button>
               </motion.div>
 

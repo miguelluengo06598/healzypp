@@ -1,12 +1,14 @@
 "use client"
 
-import React, { useEffect, useState } from "react"
+import React, { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { motion } from "framer-motion"
 import { integralCF } from "@/styles/fonts"
 import { cn } from "@/lib/utils"
 import { FaCheckCircle } from "react-icons/fa"
+import { useMetaPixel } from "@/hooks/useMetaPixel"
+import { getPurchaseEventId } from "@/lib/meta/pixel"
 
 interface OrderItem {
   name: string
@@ -21,6 +23,7 @@ interface OrderData {
   orderNumber: string
   email: string
   firstName: string
+  paymentMethod?: "card" | "cod"
   items: OrderItem[]
   shippingAddress: {
     firstName: string
@@ -57,6 +60,8 @@ function calcItemPrice(item: OrderItem): number {
 export default function ConfirmationPage() {
   const [order, setOrder] = useState<OrderData | null>(null)
   const [missing, setMissing] = useState(false)
+  const { trackPurchase } = useMetaPixel()
+  const purchaseFiredRef = useRef(false)
 
   useEffect(() => {
     try {
@@ -66,11 +71,38 @@ export default function ConfirmationPage() {
         return
       }
       setOrder(JSON.parse(raw) as OrderData)
-      // Keep the data so refreshing still shows the page
     } catch {
       setMissing(true)
     }
   }, [])
+
+  // Dispara Purchase una sola vez cuando los datos del pedido estén disponibles.
+  // Usa event_id determinístico para deduplicación con el CAPI del servidor.
+  useEffect(() => {
+    if (!order || purchaseFiredRef.current) return
+    purchaseFiredRef.current = true
+
+    trackPurchase(
+      {
+        orderId:     order.orderNumber,
+        orderNumber: order.orderNumber,
+        value:       order.totalEur,
+        currency:    'EUR',
+        items:       order.items.map((item, i) => ({
+          id:       i + 1,
+          name:     item.name,
+          quantity: item.quantity,
+          price:    item.price,
+        })),
+        email:     order.email,
+        firstName: order.firstName,
+        lastName:  order.shippingAddress.lastName,
+        city:      order.shippingAddress.city,
+        zip:       order.shippingAddress.postalCode,
+      },
+      getPurchaseEventId(order.orderNumber)
+    )
+  }, [order, trackPurchase])
 
   if (missing) {
     return (
@@ -100,6 +132,7 @@ export default function ConfirmationPage() {
   }
 
   const hasDiscount = order.couponDiscountEur > 0
+  const isCod = order.paymentMethod === "cod"
 
   return (
     <div className="min-h-screen bg-[#FAFAFA] py-12 px-4">
@@ -180,6 +213,20 @@ export default function ConfirmationPage() {
             </div>
           </div>
 
+          {/* COD notice */}
+          {isCod && (
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 flex items-start gap-3">
+              <span className="text-2xl leading-none">💳</span>
+              <div>
+                <p className="font-semibold text-amber-800 text-sm">Pago contra reembolso</p>
+                <p className="text-amber-700 text-sm mt-0.5">
+                  Pagarás <strong>{fmtEur(order.totalEur)}</strong> cuando recibas tu pedido.
+                  El repartidor acepta efectivo o tarjeta.
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Price summary */}
           <div className="bg-white rounded-2xl border border-[#E5E5E5] p-5">
             <h2 className="font-semibold text-sm mb-4">Resumen del pago</h2>
@@ -210,6 +257,54 @@ export default function ConfirmationPage() {
               </div>
             </div>
           </div>
+
+          {/* WhatsApp CTA — solo COD */}
+          {isCod && (
+            <div
+              className="rounded-[14px] p-5"
+              style={{ background: "#f0faf0", border: "1.5px solid #2d6a2d" }}
+            >
+              <p className="font-bold text-[#2d6a2d] text-base mb-1">
+                📱 ¡Un último paso!
+              </p>
+              <p className="text-black/60 text-sm mb-4">
+                Confirma tu pedido por WhatsApp para que lo procesemos cuanto antes.
+              </p>
+              <a
+                href={(() => {
+                  const numero = "34624540486"
+                  const nombre = `${order.shippingAddress.firstName} ${order.shippingAddress.lastName}`.trim()
+                  const direccion = [
+                    order.shippingAddress.address,
+                    order.shippingAddress.apartment,
+                    order.shippingAddress.postalCode,
+                    order.shippingAddress.city,
+                    order.shippingAddress.province,
+                  ]
+                    .filter(Boolean)
+                    .join(", ")
+                  const mensaje = encodeURIComponent(
+                    `Hola, quiero confirmar mi pedido:\n\n` +
+                    `📦 Pedido: #${order.orderNumber}\n` +
+                    `👤 Nombre: ${nombre}\n` +
+                    `💰 Total: ${fmtEur(order.totalEur)}\n` +
+                    `📍 Dirección: ${direccion}\n\n` +
+                    `¡Confirmo el pedido!`
+                  )
+                  return `https://wa.me/${numero}?text=${mensaje}`
+                })()}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-center gap-2 w-full rounded-[10px] py-3.5 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+                style={{ background: "#25D366" }}
+              >
+                💬 Confirmar pedido por WhatsApp
+              </a>
+              <p className="text-center text-xs text-black/40 mt-3">
+                También puedes llamarnos al 624 540 486
+              </p>
+            </div>
+          )}
 
           {/* Shipping details */}
           <div className="bg-white rounded-2xl border border-[#E5E5E5] p-5">

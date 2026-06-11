@@ -1,23 +1,19 @@
 "use client";
 
 import React, {
-  useCallback,
   useEffect,
   useMemo,
-  useRef,
   useState,
 } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ShoppingBag,
-  X,
   ArrowRight,
   Truck,
   CreditCard,
-  Wallet,
   Package,
   Minus,
   Plus,
@@ -30,7 +26,6 @@ import {
   SheetContent,
   SheetHeader,
   SheetTitle,
-  SheetTrigger,
   SheetClose,
 } from "@/components/ui/sheet";
 import { Separator } from "@/components/ui/separator";
@@ -44,19 +39,17 @@ import {
   addToCart,
   remove,
 } from "@/lib/features/carts/cartsSlice";
+import CheckoutModal from "@/components/checkout/CheckoutModal";
+import PaymentMethodSelector from "@/components/cart/PaymentMethodSelector";
 
 /* ------------------------------------------------------------------ */
 /*  TYPES                                                              */
 /* ------------------------------------------------------------------ */
 
-interface FloatingCartBarProps {
-  onOpenDrawer: () => void;
-  onDismiss: () => void;
-}
-
 interface MiniCartDrawerProps {
   open: boolean;
   onOpenChange: (v: boolean) => void;
+  onOpenCheckout: (method: "card" | "cod") => void;
 }
 
 interface AnimatedCheckoutCTAProps {
@@ -87,119 +80,22 @@ const SPRING_SOFT = {
   damping: 28,
 };
 
-const SPRING_BOUNCE = {
-  type: "spring" as const,
-  stiffness: 400,
-  damping: 18,
-  mass: 0.8,
-};
-
 /* ------------------------------------------------------------------ */
 /*  HOOKS                                                              */
 /* ------------------------------------------------------------------ */
 
-/**
- * Detecta dirección del scroll. Umbral de 10px para evitar jitter.
- */
-const useScrollDirection = () => {
-  const [direction, setDirection] = useState<"up" | "down" | null>(null);
-  const lastY = useRef(0);
-
-  useEffect(() => {
-    const onScroll = () => {
-      const y = window.scrollY;
-      const diff = y - lastY.current;
-      if (Math.abs(diff) < 10) return;
-      setDirection(diff > 0 ? "down" : "up");
-      lastY.current = y;
-    };
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
-
-  return direction;
-};
-
-/**
- * Hook central del SmartCart.
- * - Muestra al hacer scroll up
- * - Muestra cuando se añade un producto (detecta incremento de totalQuantities)
- * - Auto-oculta tras 5s de inactividad
- * - Mantiene abierto mientras el drawer esté activo
- */
 const useSmartCart = () => {
-  const [visible, setVisible] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const prevQty = useRef<number>(0);
 
   const { cart, totalPrice, adjustedTotalPrice } = useAppSelector(
     (state: RootState) => state.carts
   );
   const qty = cart?.totalQuantities ?? 0;
-  const scrollDir = useScrollDirection();
-  const pathname = usePathname();
-
   const hasItems = qty > 0;
 
-  /* --- mostrar --- */
-  const show = useCallback(() => {
-    if (!hasItems) return;
-    setVisible(true);
-    if (hideTimer.current) clearTimeout(hideTimer.current);
-    hideTimer.current = setTimeout(() => {
-      setVisible(false);
-    }, 5000);
-  }, [hasItems]);
-
-  /* --- ocultar manual --- */
-  const dismiss = useCallback(() => {
-    setVisible(false);
-    if (hideTimer.current) clearTimeout(hideTimer.current);
-  }, []);
-
-  /* --- scroll up → mostrar --- */
-  useEffect(() => {
-    if (scrollDir === "up") show();
-  }, [scrollDir, show]);
-
-  /* --- add product detectado --- */
-  useEffect(() => {
-    if (qty > prevQty.current) {
-      show();
-    }
-    prevQty.current = qty;
-  }, [qty, show]);
-
-  /* --- intención de compra: páginas de producto --- */
-  useEffect(() => {
-    if (pathname?.startsWith("/shop/product/")) {
-      show();
-    }
-  }, [pathname, show]);
-
-  /* --- limpieza --- */
-  useEffect(() => {
-    return () => {
-      if (hideTimer.current) clearTimeout(hideTimer.current);
-    };
-  }, []);
-
-  /* --- mantener visible mientras drawer abierto --- */
-  useEffect(() => {
-    if (drawerOpen) {
-      if (hideTimer.current) clearTimeout(hideTimer.current);
-      setVisible(true);
-    } else if (hasItems) {
-      show();
-    }
-  }, [drawerOpen, hasItems, show]);
-
   return {
-    visible,
     drawerOpen,
     setDrawerOpen,
-    dismiss,
     qty,
     totalPrice,
     adjustedTotalPrice,
@@ -214,9 +110,6 @@ const useSmartCart = () => {
 
 /**
  * ProgressShippingBar
- * ──────────────────────────────────────────────────────────────────
- * Barra simple de progreso hacia envío gratis / meta. Integrada con
- * colores existentes del proyecto.
  */
 const ProgressShippingBar: React.FC<ProgressShippingBarProps> = ({
   current,
@@ -250,8 +143,6 @@ const ProgressShippingBar: React.FC<ProgressShippingBarProps> = ({
 
 /**
  * AnimatedCheckoutCTA
- * ──────────────────────────────────────────────────────────────────
- * Reutiliza Button + framer-motion spring. Flecha animada en hover.
  */
 const AnimatedCheckoutCTA: React.FC<AnimatedCheckoutCTAProps> = ({
   total,
@@ -285,9 +176,6 @@ const AnimatedCheckoutCTA: React.FC<AnimatedCheckoutCTAProps> = ({
 
 /**
  * CartItemRow
- * ──────────────────────────────────────────────────────────────────
- * Fila compacta para el MiniCartDrawer. Reutiliza patrones visuales
- * de cart-page/ProductCard pero simplificado.
  */
 const CartItemRow: React.FC<{ item: CartItem }> = ({ item }) => {
   const dispatch = useAppDispatch();
@@ -403,9 +291,6 @@ const CartItemRow: React.FC<{ item: CartItem }> = ({ item }) => {
 
 /**
  * MiniCartSkeleton
- * ──────────────────────────────────────────────────────────────────
- * Skeleton loader para el mini-cart. Reutiliza estilos de shimmer
- * consistentes con el proyecto.
  */
 const MiniCartSkeleton: React.FC = () => {
   return (
@@ -426,13 +311,11 @@ const MiniCartSkeleton: React.FC = () => {
 
 /**
  * MiniCartDrawer
- * ──────────────────────────────────────────────────────────────────
- * Reutiliza Sheet (shadcn/ui) ya existente. Lista compacta de
- * productos + totales + CTAs.
  */
 const MiniCartDrawer: React.FC<MiniCartDrawerProps> = ({
   open,
   onOpenChange,
+  onOpenCheckout,
 }) => {
   const router = useRouter();
   const dispatch = useAppDispatch();
@@ -442,6 +325,11 @@ const MiniCartDrawer: React.FC<MiniCartDrawerProps> = ({
   const items = cart?.items ?? [];
   const hasItems = items.length > 0;
   const discount = totalPrice - adjustedTotalPrice;
+  const [showSelector, setShowSelector] = useState(false);
+
+  React.useEffect(() => {
+    if (!open) setShowSelector(false);
+  }, [open]);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -507,38 +395,42 @@ const MiniCartDrawer: React.FC<MiniCartDrawerProps> = ({
                 </div>
               </div>
 
-              <AnimatedCheckoutCTA
-                total={adjustedTotalPrice}
-                onCheckout={() => {
-                  onOpenChange(false);
-                  router.push("/checkout/cod");
-                }}
-              />
-
-              <div className="grid grid-cols-2 gap-2">
-                <Button
-                  variant="outline"
-                  className="rounded-full h-11 text-xs border-black/10 hover:bg-black/5"
-                  onClick={() => {
-                    onOpenChange(false);
-                    router.push("/checkout/card");
-                  }}
-                >
-                  <CreditCard className="w-4 h-4 mr-1.5" />
-                  Tarjeta
-                </Button>
-                <Button
-                  variant="outline"
-                  className="rounded-full h-11 text-xs border-black/10 hover:bg-black/5"
-                  onClick={() => {
-                    onOpenChange(false);
-                    router.push("/cart");
-                  }}
-                >
-                  <Wallet className="w-4 h-4 mr-1.5" />
-                  Ver carrito
-                </Button>
-              </div>
+              <AnimatePresence mode="wait">
+                {showSelector ? (
+                  <PaymentMethodSelector
+                    key="selector"
+                    onConfirm={(method) => {
+                      onOpenChange(false);
+                      onOpenCheckout(method);
+                    }}
+                    onCancel={() => setShowSelector(false)}
+                  />
+                ) : (
+                  <motion.div
+                    key="cta"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.15 }}
+                    className="space-y-2"
+                  >
+                    <AnimatedCheckoutCTA
+                      total={adjustedTotalPrice}
+                      onCheckout={() => setShowSelector(true)}
+                    />
+                    <Button
+                      variant="outline"
+                      className="w-full rounded-full h-11 text-xs border-black/10 hover:bg-black/5"
+                      onClick={() => {
+                        onOpenChange(false);
+                        router.push("/cart");
+                      }}
+                    >
+                      Ver carrito completo
+                    </Button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           </>
         )}
@@ -547,140 +439,36 @@ const MiniCartDrawer: React.FC<MiniCartDrawerProps> = ({
   );
 };
 
-/**
- * FloatingCartBar
- * ──────────────────────────────────────────────────────────────────
- * Barra flotante inferior. Reutiliza Button y estilos del proyecto.
- * NO siempre visible: controlada por AnimatePresence.
- */
-const FloatingCartBar: React.FC<FloatingCartBarProps> = ({
-  onOpenDrawer,
-  onDismiss,
-}) => {
-  const { cart, adjustedTotalPrice } = useAppSelector(
-    (state: RootState) => state.carts
-  );
-  const items = cart?.items ?? [];
-  const qty = cart?.totalQuantities ?? 0;
-  const firstImage = items[0]?.srcUrl;
-
-  return (
-    <motion.div
-      initial={{ y: 100, opacity: 0 }}
-      animate={{ y: 0, opacity: 1 }}
-      exit={{ y: 100, opacity: 0 }}
-      transition={SPRING_BOUNCE}
-      className={cn(
-        "fixed bottom-4 left-4 right-4 z-40",
-        "sm:left-auto sm:right-6 sm:bottom-6 sm:w-[420px]"
-      )}
-    >
-      <div
-        className={cn(
-          "relative bg-white rounded-[20px] border border-black/10 shadow-2xl",
-          "px-4 py-3 sm:px-5 sm:py-4",
-          "flex items-center gap-3 sm:gap-4"
-        )}
-      >
-        {/* Mini imagen + counter */}
-        <button
-          onClick={onOpenDrawer}
-          className="relative shrink-0 w-11 h-11 rounded-[12px] bg-[#F0EEED] overflow-hidden flex items-center justify-center hover:scale-105 transition-transform"
-        >
-          {firstImage ? (
-            <Image
-              src={firstImage}
-              alt="Carrito"
-              fill
-              sizes="44px"
-              className="object-contain p-1"
-            />
-          ) : (
-            <ShoppingBag className="w-5 h-5 text-black/40" />
-          )}
-          <span className="absolute -top-1.5 -right-1.5 bg-brand text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center border-2 border-white">
-            {qty}
-          </span>
-        </button>
-
-        {/* Texto */}
-        <button
-          onClick={onOpenDrawer}
-          className="flex-1 text-left min-w-0"
-        >
-          <p className="text-xs text-black/50 truncate">
-            {qty} {qty === 1 ? "producto" : "productos"} en tu carrito
-          </p>
-          <p className="text-base font-bold text-black">
-            €{adjustedTotalPrice.toFixed(0)}
-          </p>
-        </button>
-
-        {/* CTA Checkout */}
-        <motion.div whileTap={{ scale: 0.95 }} transition={SPRING_SNAPPY}>
-          <Button
-            onClick={onOpenDrawer}
-            className={cn(
-              "rounded-full h-10 px-5 text-sm font-bold",
-              "bg-brand hover:bg-brand-hover text-white shadow-lg"
-            )}
-          >
-            <ShoppingBag className="w-4 h-4 mr-1.5" />
-            Ver
-          </Button>
-        </motion.div>
-
-        {/* Dismiss */}
-        <button
-          onClick={onDismiss}
-          className="shrink-0 p-1.5 rounded-full hover:bg-black/5 text-black/40 hover:text-black transition-colors"
-          aria-label="Cerrar"
-        >
-          <X className="w-4 h-4" />
-        </button>
-      </div>
-    </motion.div>
-  );
-};
-
 /* ------------------------------------------------------------------ */
 /*  MAIN COMPONENT                                                     */
 /* ------------------------------------------------------------------ */
 
-/**
- * StickySmartCart
- * ──────────────────────────────────────────────────────────────────
- * Carrito inteligente sticky que aparece en:
- *  - Scroll hacia arriba
- *  - Añadir producto al carrito
- *  - Estar en página de producto (intención de compra)
- *
- * Auto-hide tras 5s. Reutiliza Sheet, Button, Separator y el store
- * Redux existente.
- */
 const StickySmartCart: React.FC = () => {
-  const {
-    visible,
-    drawerOpen,
-    setDrawerOpen,
-    dismiss,
-    hasItems,
-  } = useSmartCart();
+  const { drawerOpen, setDrawerOpen, hasItems } = useSmartCart();
+
+  const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [checkoutMethod, setCheckoutMethod] = useState<"card" | "cod">("cod");
 
   if (!hasItems) return null;
 
+  const handleOpenCheckout = (method: "card" | "cod") => {
+    setCheckoutMethod(method);
+    setCheckoutOpen(true);
+  };
+
   return (
     <>
-      <AnimatePresence>
-        {visible && (
-          <FloatingCartBar
-            onOpenDrawer={() => setDrawerOpen(true)}
-            onDismiss={dismiss}
-          />
-        )}
-      </AnimatePresence>
+      <MiniCartDrawer
+        open={drawerOpen}
+        onOpenChange={setDrawerOpen}
+        onOpenCheckout={handleOpenCheckout}
+      />
 
-      <MiniCartDrawer open={drawerOpen} onOpenChange={setDrawerOpen} />
+      <CheckoutModal
+        open={checkoutOpen}
+        onOpenChange={setCheckoutOpen}
+        method={checkoutMethod}
+      />
     </>
   );
 };

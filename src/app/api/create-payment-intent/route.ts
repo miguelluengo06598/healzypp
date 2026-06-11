@@ -16,7 +16,17 @@ const BodySchema = z.object({
 export async function POST(req: NextRequest) {
   // ── Rate limiting: 10 intentos por IP por hora (Upstash Redis) ──────────────
   const ip = getClientIp(req);
-  const { success: allowed, limit, reset, remaining } = await paymentIntentRatelimit.limit(ip);
+
+  let allowed = true;
+  let remaining = 0;
+  try {
+    const result = await paymentIntentRatelimit.limit(ip);
+    allowed = result.success;
+    remaining = result.remaining;
+  } catch (err) {
+    console.error("[ratelimit] Redis error, skipping:", err);
+    allowed = true;
+  }
 
   if (!allowed) {
     return NextResponse.json(
@@ -24,7 +34,7 @@ export async function POST(req: NextRequest) {
       {
         status: 429,
         headers: {
-          "Retry-After": String(Math.max(0, Math.ceil((reset - Date.now()) / 1000))),
+          "Retry-After": String(3600),
           "X-RateLimit-Remaining": String(remaining),
         },
       }

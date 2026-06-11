@@ -11,7 +11,6 @@ import CookieBanner from "@/components/ui/CookieBanner";
 import MetaPixel from "@/components/tracking/MetaPixel";
 
 import StickySmartCart from "@/components/StickySmartCart";
-import MobileBottomNavigation from "@/components/MobileBottomNavigation";
 import { ProductPreviewProvider } from "@/components/ProductPreviewContext";
 import QuickProductPreviewModal from "@/components/QuickProductPreviewModal";
 import AuthModal from "@/components/auth/AuthModal";
@@ -35,7 +34,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="es">
       <body className={satoshi.className}>
         <HolyLoader color="#868686" />
         <TopBanner />
@@ -45,7 +44,6 @@ export default function RootLayout({
               <TopNavbar />
               {children}
               <StickySmartCart />
-              <MobileBottomNavigation />
               <QuickProductPreviewModal />
               <AuthModal />
               <AuthQueryHandler />

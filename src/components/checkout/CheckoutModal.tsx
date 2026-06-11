@@ -1,71 +1,124 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
-import { motion, AnimatePresence } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   Dialog,
   DialogContent,
-  DialogTitle,
   DialogDescription,
+  DialogTitle,
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { integralCF } from "@/styles/fonts";
 import {
-  Lock,
-  CreditCard,
-  Wallet,
-  CheckCircle2,
   AlertCircle,
+  CheckCircle2,
+  ChevronDown,
+  CreditCard,
   Loader2,
-  X,
+  Lock,
+  Package,
   ShieldCheck,
   Truck,
-  Package,
+  Wallet,
+  X,
 } from "lucide-react";
 
 import { stripePromise } from "@/lib/stripe";
 import {
   Elements,
-  CardNumberElement,
-  CardExpiryElement,
-  CardCvcElement,
-  PaymentRequestButtonElement,
-  useStripe,
+  PaymentElement,
   useElements,
+  useStripe,
 } from "@stripe/react-stripe-js";
 
 import { createOrderAction } from "@/app/actions/orders";
 import {
-  getStoredBundle,
-  formatPrice,
   CARD_DISCOUNT_CENTS,
+  formatPrice,
+  getStoredBundle,
   type Bundle,
 } from "@/components/checkout/OrderSummary";
-import { useMetaPixel } from "@/hooks/useMetaPixel";
 
 /* ═══════════════════════════════════════════════════════════════════════════ */
-/*  CONSTANTS                                                                  */
+/*  CONSTANTS                                                                   */
 /* ═══════════════════════════════════════════════════════════════════════════ */
 
-const PHONE_RE = /^(\+34|0034|34)?[6789]\d{8}$/;
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PHONE_RE    = /^(\+34|0034|34)?[6789]\d{8}$/;
+const EMAIL_RE    = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const POSTCODE_RE = /^\d{5}$/;
 
-const STRIPE_STYLE = {
-  base: {
-    fontSize: "16px",
-    fontFamily: "inherit",
-    fontWeight: "400",
-    color: "#111111",
-    "::placeholder": { color: "#9CA3AF" },
+const STRIPE_APPEARANCE = {
+  theme: "stripe" as const,
+  variables: {
+    colorPrimary:         "#2d6a2d",
+    colorBackground:      "#ffffff",
+    colorText:            "#111827",
+    colorDanger:          "#dc2626",
+    colorTextSecondary:   "#6b7280",
+    colorTextPlaceholder: "#9ca3af",
+    fontFamily:           '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+    fontSizeBase:         "15px",
+    fontSizeSm:           "13px",
+    fontWeightNormal:     "400",
+    fontWeightMedium:     "500",
+    fontWeightBold:       "600",
+    borderRadius:         "10px",
+    spacingUnit:          "4px",
+    spacingGridRow:       "16px",
   },
-  invalid: { color: "#ef4444" },
+  rules: {
+    ".Tab": {
+      border: "2px solid #e5e7eb", borderRadius: "10px", padding: "10px 14px",
+      fontSize: "14px", fontWeight: "500", color: "#374151",
+      boxShadow: "none", transition: "all 0.15s ease", backgroundColor: "#ffffff",
+    },
+    ".Tab:hover":    { border: "2px solid #2d6a2d", color: "#2d6a2d", backgroundColor: "#f9fafb" },
+    ".Tab--selected": {
+      border: "2px solid #2d6a2d", backgroundColor: "#f0faf0", color: "#2d6a2d",
+      fontWeight: "600", boxShadow: "0 0 0 3px rgba(45,106,45,0.1)",
+    },
+    ".TabLabel":      { fontSize: "14px", fontWeight: "500", letterSpacing: "0" },
+    ".Input": {
+      border: "2px solid #e5e7eb", borderRadius: "10px", padding: "12px 14px",
+      fontSize: "15px", fontWeight: "400", color: "#111827", backgroundColor: "#ffffff",
+      boxShadow: "none", transition: "border 0.15s ease, box-shadow 0.15s ease",
+    },
+    ".Input:focus":      { border: "2px solid #2d6a2d", boxShadow: "0 0 0 3px rgba(45,106,45,0.1)", outline: "none" },
+    ".Input--invalid":   { border: "2px solid #dc2626", boxShadow: "0 0 0 3px rgba(220,38,38,0.1)" },
+    ".Input::placeholder": { color: "#9ca3af", fontSize: "14px" },
+    ".Label":  { fontSize: "13px", fontWeight: "500", color: "#374151", marginBottom: "6px", letterSpacing: "0.01em" },
+    ".Error":  { fontSize: "13px", color: "#dc2626", marginTop: "6px", fontWeight: "400" },
+    ".TermsText": { fontSize: "12px", color: "#9ca3af" },
+    ".Block":  { borderRadius: "10px", border: "2px solid #e5e7eb" },
+    ".CheckboxInput":          { border: "2px solid #d1d5db", borderRadius: "4px" },
+    ".CheckboxInput--checked": { backgroundColor: "#2d6a2d", border: "2px solid #2d6a2d" },
+  },
 };
 
+const MAPBOX_THEME_CSS = `
+  .Input {
+    height: 2.75rem; padding: 0 1rem; background-color: white;
+    border: 2px solid #d1d5db; border-radius: 0.5rem; font-size: 0.9375rem;
+    color: #111827; width: 100%; box-shadow: none;
+    transition: border 0.15s, box-shadow 0.15s; font-family: inherit;
+  }
+  .Input:focus {
+    border-color: #487D26 !important;
+    box-shadow: 0 0 0 2px rgba(72,125,38,0.1) !important;
+    outline: none;
+  }
+  .Input::placeholder { color: #9ca3af; font-size: 0.875rem; }
+  .Results {
+    z-index: 99999; border-radius: 0.75rem;
+    overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,0.12);
+  }
+`;
+
 /* ═══════════════════════════════════════════════════════════════════════════ */
-/*  TYPES                                                                      */
+/*  TYPES                                                                       */
 /* ═══════════════════════════════════════════════════════════════════════════ */
 
 export interface CheckoutModalProps {
@@ -74,9 +127,7 @@ export interface CheckoutModalProps {
   method: "cod" | "card";
 }
 
-type CardField = "number" | "expiry" | "cvc";
-
-interface FormData {
+interface ShippingData {
   fullName: string;
   email: string;
   phone: string;
@@ -88,50 +139,69 @@ interface FormData {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════ */
-/*  ORDER SUMMARY (inline with IVA)                                            */
+/*  ORDER SUMMARY PANEL                                                         */
 /* ═══════════════════════════════════════════════════════════════════════════ */
 
-function InlineOrderSummary({ bundle, isCard }: { bundle: Bundle; isCard: boolean }) {
-  const subtotal = bundle.priceInCents;
-  const iva = Math.round(subtotal * 0.21);
-  const discount = isCard ? 500 : 0;
-  const total = Math.max(0, subtotal + iva - discount);
+function OrderSummaryPanel({ bundle, isCard }: { bundle: Bundle; isCard: boolean }) {
+  const [expanded, setExpanded] = useState(false);
+  const discount = isCard ? CARD_DISCOUNT_CENTS : 0;
+  const total    = Math.max(0, bundle.priceInCents - discount);
 
   return (
-    <div className="bg-[#F7F8F5] rounded-xl border border-black/8 p-4 space-y-2.5">
-      <h4 className={cn(integralCF.className, "text-sm text-black")}>
-        Resumen de pedido
-      </h4>
-      <div className="space-y-1.5 text-sm">
-        <div className="flex justify-between text-black/70">
-          <span>Gominolas de vinagre de manzana</span>
-          <span className="font-medium">{bundle.price}</span>
+    <div className="bg-[#F7F8F5] rounded-xl border border-black/[0.08] overflow-hidden">
+      {/* Mobile toggle */}
+      <button
+        type="button"
+        onClick={() => setExpanded(v => !v)}
+        className="md:hidden w-full flex items-center justify-between px-4 py-3 text-left"
+      >
+        <span className={cn(integralCF.className, "text-sm text-black")}>Resumen del pedido</span>
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-bold text-[#487D26]">{formatPrice(total)}</span>
+          <ChevronDown
+            className={cn(
+              "w-4 h-4 text-gray-400 transition-transform duration-200",
+              expanded && "rotate-180"
+            )}
+          />
         </div>
-        <div className="flex justify-between text-black/70">
-          <span>Envío</span>
-          <span className="text-emerald-600 font-semibold text-xs">GRATIS</span>
-        </div>
-        <div className="flex justify-between text-black/70">
-          <span>IVA (21%)</span>
-          <span className="font-medium">{formatPrice(iva)}</span>
-        </div>
-        {isCard && (
-          <div className="flex justify-between text-emerald-600">
-            <span className="font-medium">Descuento tarjeta</span>
-            <span className="font-semibold">-{formatPrice(discount)}</span>
-          </div>
-        )}
+      </button>
+
+      {/* Desktop header always visible */}
+      <div className="hidden md:block px-4 pt-4">
+        <h4 className={cn(integralCF.className, "text-sm text-black")}>Resumen de pedido</h4>
       </div>
-      <div className="border-t border-black/10 pt-2 flex justify-between items-center">
-        <span className="font-bold text-black">Total a pagar</span>
-        <span className="text-lg font-bold text-[#487D26]">{formatPrice(total)}</span>
+
+      {/* Content */}
+      <div className={cn("px-4 pb-4 pt-3 space-y-2.5", expanded ? "block" : "hidden md:block")}>
+        <div className="space-y-1.5 text-sm">
+          <div className="flex justify-between text-black/70">
+            <span>Gominolas de vinagre de manzana</span>
+            <span className="font-medium">{bundle.price}</span>
+          </div>
+          <div className="flex justify-between text-black/70">
+            <span>Envío</span>
+            <span className="text-emerald-600 font-semibold text-xs">GRATIS</span>
+          </div>
+          {isCard && (
+            <div className="flex justify-between text-emerald-600">
+              <span className="font-medium">Descuento tarjeta</span>
+              <span className="font-semibold">-{formatPrice(discount)}</span>
+            </div>
+          )}
+        </div>
+        <div className="border-t border-black/10 pt-2 flex justify-between items-center">
+          <span className="font-bold text-black">Total a pagar</span>
+          <span className="text-lg font-bold text-[#487D26]">{formatPrice(total)}</span>
+        </div>
+        <p className="text-[11px] text-black/40 text-center">IVA incluido en el precio</p>
       </div>
     </div>
   );
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════ */
-/*  INPUT FIELD COMPONENT                                                      */
+/*  SHARED FORM INPUT                                                           */
 /* ═══════════════════════════════════════════════════════════════════════════ */
 
 function FormInput({
@@ -168,7 +238,7 @@ function FormInput({
               ? "border-red-400 focus:border-red-500 focus:ring-2 focus:ring-red-100"
               : success
               ? "border-emerald-400 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
-              : "border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              : "border-gray-300 focus:border-[#487D26] focus:ring-2 focus:ring-[#487D26]/10"
           )}
           {...register}
         />
@@ -181,7 +251,6 @@ function FormInput({
   );
 }
 
-/** Shared address input class (mirrors FormInput styles). */
 const addrInputCls = (error?: string, success?: boolean) =>
   cn(
     "w-full h-11 px-4 rounded-lg border text-base outline-none transition-all",
@@ -190,41 +259,53 @@ const addrInputCls = (error?: string, success?: boolean) =>
       ? "border-red-400 focus:border-red-500 focus:ring-2 focus:ring-red-100"
       : success
       ? "border-emerald-400 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
-      : "border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+      : "border-gray-300 focus:border-[#487D26] focus:ring-2 focus:ring-[#487D26]/10"
   );
 
 /* ═══════════════════════════════════════════════════════════════════════════ */
-/*  CARD FORM (inner, requires Elements context)                               */
+/*  SKELETON — mientras carga clientSecret                                      */
 /* ═══════════════════════════════════════════════════════════════════════════ */
 
-function CardFormInner({
+function SkeletonForm() {
+  return (
+    <div className="space-y-4 animate-pulse">
+      <div className="h-4 w-32 bg-gray-200 rounded" />
+      <div className="h-11 bg-gray-100 rounded-lg" />
+      <div className="h-11 bg-gray-100 rounded-lg" />
+      <div className="h-11 bg-gray-100 rounded-lg" />
+      <div className="h-11 bg-gray-100 rounded-lg" />
+      <div className="grid grid-cols-2 gap-3">
+        <div className="h-11 bg-gray-100 rounded-lg" />
+        <div className="h-11 bg-gray-100 rounded-lg" />
+      </div>
+      <div className="h-11 bg-gray-100 rounded-lg" />
+      <div className="h-4 w-28 bg-gray-200 rounded mt-2" />
+      <div className="h-36 bg-gray-100 rounded-xl" />
+      <div className="h-12 bg-gray-200 rounded-full" />
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════ */
+/*  CARD FORM — todo en una vista, dentro de <Elements>                         */
+/* ═══════════════════════════════════════════════════════════════════════════ */
+
+function CardForm({
   bundle,
-  onSuccess,
   onError,
 }: {
   bundle: Bundle;
-  onSuccess: () => void;
   onError: (msg: string) => void;
 }) {
-  const stripe = useStripe();
+  const stripe   = useStripe();
   const elements = useElements();
-  const { trackPurchase } = useMetaPixel();
-  const [submitting, setSubmitting] = useState(false);
+  const router   = useRouter();
 
-  // Stripe card field state
-  const [cardErrors, setCardErrors] = useState<Partial<Record<CardField, string>>>({});
-  const [cardComplete, setCardComplete] = useState<Record<CardField, boolean>>({
-    number: false,
-    expiry: false,
-    cvc: false,
-  });
-  const [cardFocus, setCardFocus] = useState<CardField | null>(null);
+  const [submitting,   setSubmitting]   = useState(false);
+  const [paymentReady, setPaymentReady] = useState(false);
 
-  // Apple Pay / Google Pay payment request
-  const [paymentRequest, setPaymentRequest] = useState<any>(null);
-
-  // Mapbox AddressAutofill — dynamic import to avoid SSR errors
-  const [AddressAutofill, setAddressAutofill] = useState<React.ComponentType<any> | null>(null);
+  const [SearchBox,    setSearchBox]    = useState<React.ComponentType<any> | null>(null);
+  const [addressValue, setAddressValue] = useState("");
   const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? "";
 
   const {
@@ -232,280 +313,143 @@ function CardFormInner({
     handleSubmit,
     watch,
     setValue,
-    trigger,
-    getValues,
     formState: { errors, touchedFields },
-  } = useForm<FormData>({ mode: "onTouched" });
+  } = useForm<ShippingData>({ mode: "onTouched" });
 
-  const watched = watch();
-  const inputValid = (field: keyof FormData) =>
-    !!touchedFields[field] && !errors[field] && !!watched[field];
-
+  const watched    = watch();
+  const inputValid = (f: keyof ShippingData) => !!touchedFields[f] && !errors[f] && !!watched[f];
   const totalCents = Math.max(0, bundle.priceInCents - CARD_DISCOUNT_CENTS);
 
-  // Load Mapbox AddressAutofill lazily
   useEffect(() => {
     if (!mapboxToken) {
-      console.warn("[Checkout] Falta NEXT_PUBLIC_MAPBOX_TOKEN en .env — autocompletado de dirección desactivado.");
+      console.error("[Mapbox] NEXT_PUBLIC_MAPBOX_TOKEN no está definido");
       return;
     }
-    import("@mapbox/search-js-react").then((mod) => {
-      setAddressAutofill(() => mod.AddressAutofill);
+    import("@mapbox/search-js-react").then(mod => {
+      setSearchBox(() => mod.SearchBox as React.ComponentType<any>);
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Apple Pay / Google Pay setup
-  useEffect(() => {
-    if (!stripe) return;
+  const onMapboxRetrieve = (result: any) => {
+    const feature = result.features?.[0];
+    if (!feature) return;
+    const props    = feature.properties;
+    const ctx      = props?.context;
+    const addrLine = props?.address_line1 ?? props?.name ?? "";
+    if (addrLine) {
+      setAddressValue(addrLine);
+      setValue("address", addrLine, { shouldValidate: true, shouldTouch: true });
+    }
+    if (ctx?.postcode?.name) setValue("postcode", ctx.postcode.name, { shouldValidate: true });
+    if (ctx?.place?.name)    setValue("city",     ctx.place.name,    { shouldValidate: true });
+    if (ctx?.region?.name)   setValue("province", ctx.region.name,   { shouldValidate: true });
+  };
 
-    const pr = stripe.paymentRequest({
-      country: "ES",
-      currency: "eur",
-      total: { label: "Tu pedido", amount: totalCents },
-      requestPayerName: true,
-      requestPayerEmail: true,
-    });
-
-    pr.canMakePayment().then((result) => {
-      if (result) setPaymentRequest(pr);
-    });
-
-    pr.on("paymentmethod", async (ev: any) => {
-      // Honeypot check
-      const formValues = getValues();
-      if (formValues._hp) {
-        ev.complete("fail");
-        return;
-      }
-
-      // Validate all form fields (shows inline errors if incomplete)
-      const isValid = await trigger();
-      if (!isValid) {
-        ev.complete("fail");
-        onError("Completa todos los campos del formulario antes de usar Apple Pay o Google Pay.");
-        return;
-      }
-
-      try {
-        // Create PaymentIntent on server
-        const intentRes = await fetch("/api/create-payment-intent", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ bundleId: bundle.id }),
-        });
-        const intentData = await intentRes.json();
-
-        if (!intentRes.ok || !intentData.clientSecret) {
-          ev.complete("fail");
-          onError(intentData.error ?? "Error al iniciar el pago.");
-          return;
-        }
-
-        // Confirm with Apple/Google Pay payment method
-        // handleActions: false — don't open 3DS dialog while native sheet is open
-        const { error: confirmError, paymentIntent } = await stripe.confirmCardPayment(
-          intentData.clientSecret,
-          { payment_method: ev.paymentMethod.id },
-          { handleActions: false }
-        );
-
-        if (confirmError) {
-          ev.complete("fail");
-          onError(confirmError.message ?? "El pago fue rechazado.");
-          return;
-        }
-
-        if (paymentIntent?.status === "requires_action") {
-          // Close native sheet first, then handle extra auth
-          ev.complete("success");
-          const { error: actionError } = await stripe.confirmCardPayment(intentData.clientSecret);
-          if (actionError) {
-            onError(actionError.message ?? "Se requiere autenticación adicional.");
-            return;
-          }
-        } else {
-          ev.complete("success");
-        }
-
-        // Use Apple/Google Pay payer info when available, fall back to form
-        const fullName = ev.payerName || formValues.fullName;
-        const email = ev.payerEmail || formValues.email;
-
-        // Save order in Supabase
-        const orderResult = await createOrderAction({
-          customerData: {
-            fullName,
-            email,
-            phone: formValues.phone.replace(/[\s\-]/g, ""),
-            address: formValues.address,
-            postalCode: formValues.postcode,
-            city: formValues.city,
-            province: formValues.province,
-          },
-          bundleId: bundle.id,
-          paymentMethod: "CARD",
-          stripePaymentIntentId: paymentIntent!.id,
-        });
-
-        if (!orderResult.success) {
-          onError(`El pago fue procesado. Guarda tu referencia: ${paymentIntent!.id}`);
-          return;
-        }
-
-        const names = fullName.split(" ");
-        trackPurchase({
-          orderId: orderResult.orderId ?? paymentIntent!.id,
-          orderNumber: orderResult.orderNumber ?? paymentIntent!.id,
-          value: totalCents / 100,
-          currency: "EUR",
-          items: [{ id: bundle.id, name: bundle.name, quantity: 1, price: bundle.priceInCents / 100 }],
-          email: email || undefined,
-          phone: formValues.phone.replace(/[\s\-]/g, ""),
-          firstName: names[0],
-          lastName: names.slice(1).join(" "),
-          city: formValues.city,
-          zip: formValues.postcode,
-        });
-
-        onSuccess();
-      } catch (e) {
-        ev.complete("fail");
-        onError(e instanceof Error ? e.message : "Error inesperado.");
-      }
-    });
-  }, [stripe]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const onSubmit = async (data: FormData) => {
+  const onSubmit = async (data: ShippingData) => {
     if (data._hp) return;
     if (!stripe || !elements) {
       onError("El sistema de pago no está listo. Recarga la página.");
       return;
     }
-    if (!cardComplete.number || !cardComplete.expiry || !cardComplete.cvc) {
-      onError("Completa todos los datos de la tarjeta.");
-      return;
-    }
 
     setSubmitting(true);
     onError("");
 
     try {
-      const cardElement = elements.getElement(CardNumberElement)!;
-      const { paymentMethod, error: pmError } = await stripe.createPaymentMethod({
-        type: "card",
-        card: cardElement,
-        billing_details: {
-          name: data.fullName,
-          email: data.email,
-          phone: data.phone,
-          address: {
-            line1: data.address,
-            city: data.city,
-            state: data.province,
-            postal_code: data.postcode,
-            country: "ES",
+      const { error, paymentIntent } = await stripe.confirmPayment({
+        elements,
+        confirmParams: {
+          return_url: `${window.location.origin}/order/confirmation`,
+          payment_method_data: {
+            billing_details: {
+              name:  data.fullName,
+              email: data.email,
+              phone: data.phone.replace(/[\s\-]/g, ""),
+              address: {
+                line1:       data.address,
+                city:        data.city,
+                state:       data.province,
+                postal_code: data.postcode,
+                country:     "ES",
+              },
+            },
           },
         },
+        redirect: "if_required",
       });
 
-      if (pmError) {
-        onError(pmError.message ?? "Error al procesar la tarjeta.");
+      if (error) {
+        onError(error.message ?? "El pago fue rechazado.");
+        return;
+      }
+      if (!paymentIntent || paymentIntent.status !== "succeeded") {
+        onError("El pago no pudo completarse. Inténtalo de nuevo.");
         return;
       }
 
-      const intentRes = await fetch("/api/create-payment-intent", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ bundleId: bundle.id }),
-      });
-      const intentData = await intentRes.json();
-
-      if (!intentRes.ok || !intentData.clientSecret) {
-        onError(intentData.error ?? "Error al iniciar el pago.");
-        return;
-      }
-
-      const { error: confirmError, paymentIntent } = await stripe.confirmCardPayment(
-        intentData.clientSecret,
-        { payment_method: paymentMethod.id }
-      );
-
-      if (confirmError) {
-        onError(confirmError.message ?? "El pago fue rechazado.");
-        return;
-      }
-
-      if (paymentIntent?.status !== "succeeded") {
-        onError("El pago no pudo completarse.");
-        return;
-      }
-
-      const names = data.fullName.split(" ");
+      const names       = data.fullName.split(" ");
       const orderResult = await createOrderAction({
         customerData: {
-          fullName: data.fullName,
-          phone: data.phone.replace(/[\s\-]/g, ""),
-          address: data.address,
+          fullName:   data.fullName,
+          phone:      data.phone.replace(/[\s\-]/g, ""),
+          address:    data.address,
           postalCode: data.postcode,
-          city: data.city,
-          province: data.province,
-          email: data.email,
+          city:       data.city,
+          province:   data.province,
+          email:      data.email,
         },
-        bundleId: bundle.id,
-        paymentMethod: "CARD",
+        bundleId:              bundle.id,
+        paymentMethod:         "CARD",
         stripePaymentIntentId: paymentIntent.id,
       });
 
       if (!orderResult.success) {
-        onError(`El pago fue procesado. Guarda tu referencia: ${paymentIntent.id}`);
-        return;
+        console.error("[CardForm] Order creation failed:", orderResult.error);
       }
 
-      trackPurchase({
-        orderId: orderResult.orderId ?? paymentIntent.id,
-        orderNumber: orderResult.orderNumber ?? paymentIntent.id,
-        value: bundle.priceInCents / 100,
-        currency: "EUR",
-        items: [{ id: bundle.id, name: bundle.name, quantity: 1, price: bundle.priceInCents / 100 }],
-        email: data.email,
-        phone: data.phone.replace(/[\s\-]/g, ""),
-        firstName: names[0],
-        lastName: names.slice(1).join(" "),
-        city: data.city,
-        zip: data.postcode,
-      });
+      try {
+        sessionStorage.setItem("healzyp_order", JSON.stringify({
+          orderNumber:     orderResult.orderNumber ?? paymentIntent.id,
+          email:           data.email,
+          firstName:       names[0],
+          paymentMethod:   "card",
+          items: [{
+            name:       bundle.name,
+            srcUrl:     "/images/FOTOPRODUCT1.png",
+            quantity:   1,
+            attributes: [],
+            price:      bundle.priceInCents / 100,
+            discount:   0,
+          }],
+          shippingAddress: {
+            firstName:  names[0],
+            lastName:   names.slice(1).join(" "),
+            address:    data.address,
+            apartment:  "",
+            postalCode: data.postcode,
+            city:       data.city,
+            province:   data.province,
+            country:    "España",
+          },
+          shippingMethod:    { name: "Envío gratuito", estimatedDays: "2-4 días laborables", price: 0 },
+          subtotalEur:       bundle.priceInCents / 100,
+          shippingCostEur:   0,
+          couponDiscountEur: CARD_DISCOUNT_CENTS / 100,
+          totalEur:          totalCents / 100,
+        }));
+      } catch {}
 
-      onSuccess();
+      router.push("/order/confirmation");
     } catch (e) {
-      onError(e instanceof Error ? e.message : "Error inesperado");
+      onError(e instanceof Error ? e.message : "Hubo un problema al procesar tu pedido. Inténtalo de nuevo.");
     } finally {
       setSubmitting(false);
     }
   };
 
-  const cardWrap = (field: CardField) =>
-    cn(
-      "w-full h-11 px-4 rounded-lg border text-base transition-all bg-white flex items-center",
-      cardErrors[field]
-        ? "border-red-400 ring-2 ring-red-100"
-        : cardFocus === field
-        ? "border-blue-500 ring-2 ring-blue-100"
-        : cardComplete[field] && !cardErrors[field]
-        ? "border-emerald-400"
-        : "border-gray-300"
-    );
-
-  const onMapboxRetrieve = (res: any) => {
-    const f = res.features?.[0]?.properties;
-    if (!f) return;
-    if (f.address_line1) setValue("address", f.address_line1, { shouldValidate: true });
-    if (f.place) setValue("city", f.place, { shouldValidate: true });
-    if (f.postcode) setValue("postcode", f.postcode, { shouldValidate: true });
-    if (f.region) setValue("province", f.region, { shouldValidate: true });
-  };
-
   return (
-    <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-5">
+    <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-6">
+      {/* Honeypot */}
       <input
         type="text"
         tabIndex={-1}
@@ -514,362 +458,9 @@ function CardFormInner({
         {...register("_hp")}
       />
 
-      {/* ── Datos personales ─────────────────────────────────────────────────── */}
+      {/* ── Datos de envío ───────────────────────────────────────────────── */}
       <div className="space-y-4">
-        <div className="flex items-center gap-2 pb-2 border-b border-gray-200">
-          <Package className="w-4 h-4 text-gray-500" />
-          <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wide">
-            Datos personales
-          </h3>
-        </div>
-
-        <FormInput
-          label="Nombre completo"
-          placeholder="María García López"
-          error={errors.fullName?.message}
-          success={inputValid("fullName")}
-          register={register("fullName", {
-            required: "Obligatorio",
-            minLength: { value: 2, message: "Mínimo 2 caracteres" },
-          })}
-          name="fullName"
-          autoComplete="name"
-        />
-
-        <FormInput
-          label="Email"
-          placeholder="maria@email.com"
-          error={errors.email?.message}
-          success={inputValid("email")}
-          register={register("email", {
-            required: "Obligatorio",
-            pattern: { value: EMAIL_RE, message: "Email no válido" },
-          })}
-          name="email"
-          type="email"
-          autoComplete="email"
-        />
-
-        <FormInput
-          label="Teléfono"
-          placeholder="612 345 678"
-          error={errors.phone?.message}
-          success={inputValid("phone")}
-          register={register("phone", {
-            required: "Obligatorio",
-            pattern: { value: PHONE_RE, message: "Teléfono no válido" },
-          })}
-          name="phone"
-          type="tel"
-          autoComplete="tel"
-        />
-
-        {/* Address with Mapbox autofill */}
-        <div className="space-y-1.5">
-          <label className="text-sm font-semibold text-gray-800 block">Dirección</label>
-          <div className="relative">
-            {AddressAutofill && mapboxToken ? (
-              <AddressAutofill
-                accessToken={mapboxToken}
-                options={{ country: "es", language: "es" }}
-                onRetrieve={onMapboxRetrieve}
-              >
-                <input
-                  type="text"
-                  autoComplete="address-line1"
-                  placeholder="Calle Mayor 123, 2ºB"
-                  className={addrInputCls(errors.address?.message, inputValid("address"))}
-                  {...register("address", {
-                    required: "Obligatorio",
-                    minLength: { value: 5, message: "Demasiado corta" },
-                  })}
-                />
-              </AddressAutofill>
-            ) : (
-              <input
-                type="text"
-                autoComplete="street-address"
-                placeholder="Calle Mayor 123, 2ºB"
-                className={addrInputCls(errors.address?.message, inputValid("address"))}
-                {...register("address", {
-                  required: "Obligatorio",
-                  minLength: { value: 5, message: "Demasiado corta" },
-                })}
-              />
-            )}
-            {inputValid("address") && !errors.address && (
-              <CheckCircle2 className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-emerald-500" />
-            )}
-          </div>
-          {errors.address && (
-            <p className="text-xs text-red-500 font-medium">{errors.address.message}</p>
-          )}
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          <FormInput
-            label="Código Postal"
-            placeholder="28001"
-            error={errors.postcode?.message}
-            success={inputValid("postcode")}
-            register={register("postcode", {
-              required: "Obligatorio",
-              pattern: { value: POSTCODE_RE, message: "5 dígitos" },
-            })}
-            name="postcode"
-            autoComplete="postal-code"
-          />
-          <FormInput
-            label="Ciudad"
-            placeholder="Madrid"
-            error={errors.city?.message}
-            success={inputValid("city")}
-            register={register("city", { required: "Obligatorio" })}
-            name="city"
-            autoComplete="address-level2"
-          />
-        </div>
-
-        <FormInput
-          label="Provincia"
-          placeholder="Madrid"
-          error={errors.province?.message}
-          success={inputValid("province")}
-          register={register("province", { required: "Obligatorio" })}
-          name="province"
-          autoComplete="address-level1"
-        />
-      </div>
-
-      {/* ── Apple Pay / Google Pay ────────────────────────────────────────────── */}
-      {paymentRequest && (
-        <div className="space-y-0">
-          <PaymentRequestButtonElement
-            options={{
-              paymentRequest,
-              style: {
-                paymentRequestButton: {
-                  type: "buy",
-                  theme: "dark",
-                  height: "48px",
-                },
-              },
-            }}
-            className="rounded-lg overflow-hidden"
-          />
-          <div className="flex items-center gap-3 pt-4">
-            <hr className="flex-1 border-gray-200" />
-            <span className="text-xs text-gray-400 whitespace-nowrap">
-              o pagar con tarjeta
-            </span>
-            <hr className="flex-1 border-gray-200" />
-          </div>
-        </div>
-      )}
-
-      {/* ── Datos de la tarjeta ───────────────────────────────────────────────── */}
-      <div className="space-y-4">
-        <div className="flex items-center gap-2 pb-2 border-b border-gray-200">
-          <CreditCard className="w-4 h-4 text-gray-500" />
-          <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wide">
-            Datos de la tarjeta
-          </h3>
-        </div>
-
-        <div className="bg-gray-50 rounded-lg border border-gray-200 p-4 space-y-4">
-          <div>
-            <label className="text-sm font-semibold text-gray-800 block mb-1.5">
-              Número de tarjeta
-            </label>
-            <div className={cardWrap("number")}>
-              <CardNumberElement
-                options={{ style: STRIPE_STYLE, showIcon: true }}
-                onChange={(e) => {
-                  setCardComplete((p) => ({ ...p, number: e.complete }));
-                  setCardErrors((p) => ({ ...p, number: e.error?.message }));
-                }}
-                onFocus={() => setCardFocus("number")}
-                onBlur={() => setCardFocus(null)}
-              />
-            </div>
-            {cardErrors.number && (
-              <p className="text-xs text-red-500 mt-1">{cardErrors.number}</p>
-            )}
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-sm font-semibold text-gray-800 block mb-1.5">
-                Caducidad
-              </label>
-              <div className={cardWrap("expiry")}>
-                <CardExpiryElement
-                  options={{ style: STRIPE_STYLE }}
-                  onChange={(e) => {
-                    setCardComplete((p) => ({ ...p, expiry: e.complete }));
-                    setCardErrors((p) => ({ ...p, expiry: e.error?.message }));
-                  }}
-                  onFocus={() => setCardFocus("expiry")}
-                  onBlur={() => setCardFocus(null)}
-                />
-              </div>
-              {cardErrors.expiry && (
-                <p className="text-xs text-red-500 mt-1">{cardErrors.expiry}</p>
-              )}
-            </div>
-            <div>
-              <label className="text-sm font-semibold text-gray-800 block mb-1.5">CVC</label>
-              <div className={cardWrap("cvc")}>
-                <CardCvcElement
-                  options={{ style: STRIPE_STYLE }}
-                  onChange={(e) => {
-                    setCardComplete((p) => ({ ...p, cvc: e.complete }));
-                    setCardErrors((p) => ({ ...p, cvc: e.error?.message }));
-                  }}
-                  onFocus={() => setCardFocus("cvc")}
-                  onBlur={() => setCardFocus(null)}
-                />
-              </div>
-              {cardErrors.cvc && (
-                <p className="text-xs text-red-500 mt-1">{cardErrors.cvc}</p>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <Button
-        type="submit"
-        disabled={submitting}
-        className="w-full rounded-full h-12 bg-brand hover:bg-brand-hover text-white font-bold text-base shadow-[0_4px_14px_rgba(72,125,38,0.35)]"
-      >
-        {submitting ? (
-          <>
-            <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-            Procesando pago...
-          </>
-        ) : (
-          <>
-            <Lock className="w-5 h-5 mr-2" />
-            Pagar — {formatPrice(totalCents)}
-          </>
-        )}
-      </Button>
-    </form>
-  );
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════ */
-/*  COD FORM                                                                   */
-/* ═══════════════════════════════════════════════════════════════════════════ */
-
-function CodForm({
-  bundle,
-  onSuccess,
-  onError,
-}: {
-  bundle: Bundle;
-  onSuccess: () => void;
-  onError: (msg: string) => void;
-}) {
-  const { trackPurchase } = useMetaPixel();
-  const [submitting, setSubmitting] = useState(false);
-
-  // Mapbox AddressAutofill — dynamic import
-  const [AddressAutofill, setAddressAutofill] = useState<React.ComponentType<any> | null>(null);
-  const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? "";
-
-  const {
-    register,
-    handleSubmit,
-    watch,
-    setValue,
-    formState: { errors, touchedFields },
-  } = useForm<FormData>({ mode: "onTouched" });
-
-  const watched = watch();
-  const inputValid = (field: keyof FormData) =>
-    !!touchedFields[field] && !errors[field] && !!watched[field];
-
-  // Load Mapbox lazily
-  useEffect(() => {
-    if (!mapboxToken) return;
-    import("@mapbox/search-js-react").then((mod) => {
-      setAddressAutofill(() => mod.AddressAutofill);
-    });
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const onMapboxRetrieve = (res: any) => {
-    const f = res.features?.[0]?.properties;
-    if (!f) return;
-    if (f.address_line1) setValue("address", f.address_line1, { shouldValidate: true });
-    if (f.place) setValue("city", f.place, { shouldValidate: true });
-    if (f.postcode) setValue("postcode", f.postcode, { shouldValidate: true });
-    if (f.region) setValue("province", f.region, { shouldValidate: true });
-  };
-
-  const onSubmit = async (data: FormData) => {
-    if (data._hp) return;
-
-    setSubmitting(true);
-    onError("");
-
-    try {
-      const result = await createOrderAction({
-        customerData: {
-          fullName: data.fullName,
-          phone: data.phone.replace(/[\s\-]/g, ""),
-          address: data.address,
-          postalCode: data.postcode,
-          city: data.city,
-          province: data.province,
-          email: data.email,
-        },
-        bundleId: bundle.id,
-        paymentMethod: "COD",
-      });
-
-      if (!result.success) {
-        onError(result.error ?? "Error al crear el pedido.");
-        return;
-      }
-
-      const names = data.fullName.split(" ");
-      trackPurchase({
-        orderId: result.orderId ?? "cod-unknown",
-        orderNumber: result.orderNumber ?? "cod-unknown",
-        value: bundle.priceInCents / 100,
-        currency: "EUR",
-        items: [{ id: bundle.id, name: bundle.name, quantity: 1, price: bundle.priceInCents / 100 }],
-        email: data.email || undefined,
-        phone: data.phone.replace(/[\s\-]/g, ""),
-        firstName: names[0],
-        lastName: names.slice(1).join(" "),
-        city: data.city,
-        zip: data.postcode,
-      });
-
-      onSuccess();
-    } catch (e) {
-      onError(e instanceof Error ? e.message : "Error inesperado");
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  return (
-    <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-5">
-      <input
-        type="text"
-        tabIndex={-1}
-        aria-hidden="true"
-        className="absolute opacity-0 h-0 w-0"
-        {...register("_hp")}
-      />
-
-      {/* ── Datos de envío ────────────────────────────────────────────────────── */}
-      <div className="space-y-4">
-        <div className="flex items-center gap-2 pb-2 border-b border-gray-200">
+        <div className="flex items-center gap-2 pb-1 border-b border-gray-200">
           <Package className="w-4 h-4 text-gray-500" />
           <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wide">
             Datos de envío
@@ -882,7 +473,7 @@ function CodForm({
           error={errors.fullName?.message}
           success={inputValid("fullName")}
           register={register("fullName", {
-            required: "Obligatorio",
+            required:  "Obligatorio",
             minLength: { value: 2, message: "Mínimo 2 caracteres" },
           })}
           name="fullName"
@@ -892,62 +483,71 @@ function CodForm({
         <FormInput
           label="Email"
           placeholder="maria@email.com"
+          type="email"
           error={errors.email?.message}
           success={inputValid("email")}
           register={register("email", {
             required: "Obligatorio",
-            pattern: { value: EMAIL_RE, message: "Email no válido" },
+            pattern:  { value: EMAIL_RE, message: "Email no válido" },
           })}
           name="email"
-          type="email"
           autoComplete="email"
         />
 
         <FormInput
           label="Teléfono"
           placeholder="612 345 678"
+          type="tel"
           error={errors.phone?.message}
           success={inputValid("phone")}
           register={register("phone", {
             required: "Obligatorio",
-            pattern: { value: PHONE_RE, message: "Teléfono no válido" },
+            pattern:  { value: PHONE_RE, message: "Teléfono no válido" },
           })}
           name="phone"
-          type="tel"
           autoComplete="tel"
         />
 
-        {/* Address with Mapbox autofill */}
+        {/* Dirección con Mapbox SearchBox */}
         <div className="space-y-1.5">
           <label className="text-sm font-semibold text-gray-800 block">Dirección</label>
           <div className="relative">
-            {AddressAutofill && mapboxToken ? (
-              <AddressAutofill
-                accessToken={mapboxToken}
-                options={{ country: "es", language: "es" }}
-                onRetrieve={onMapboxRetrieve}
-              >
+            {SearchBox && mapboxToken ? (
+              <>
                 <input
                   type="text"
-                  autoComplete="address-line1"
-                  placeholder="Calle Mayor 123, 2ºB"
-                  className={addrInputCls(errors.address?.message, inputValid("address"))}
+                  style={{ display: "none" }}
                   {...register("address", {
-                    required: "Obligatorio",
+                    required:  "Obligatorio",
                     minLength: { value: 5, message: "Demasiado corta" },
                   })}
+                  readOnly
                 />
-              </AddressAutofill>
+                <SearchBox
+                  accessToken={mapboxToken}
+                  value={addressValue}
+                  onChange={(v: string) => {
+                    setAddressValue(v);
+                    setValue("address", v, { shouldValidate: true, shouldTouch: true });
+                  }}
+                  onRetrieve={onMapboxRetrieve}
+                  options={{ country: "es", language: "es" }}
+                  popoverOptions={{ renderIntoPortal: true }}
+                  placeholder="Calle Mayor 123, 2ºB"
+                  theme={{ cssText: MAPBOX_THEME_CSS }}
+                />
+              </>
             ) : (
               <input
                 type="text"
                 autoComplete="street-address"
                 placeholder="Calle Mayor 123, 2ºB"
                 className={addrInputCls(errors.address?.message, inputValid("address"))}
-                {...register("address", {
-                  required: "Obligatorio",
-                  minLength: { value: 5, message: "Demasiado corta" },
-                })}
+                value={addressValue}
+                onChange={e => {
+                  setAddressValue(e.target.value);
+                  setValue("address", e.target.value, { shouldValidate: true, shouldTouch: true });
+                }}
               />
             )}
             {inputValid("address") && !errors.address && (
@@ -967,7 +567,7 @@ function CodForm({
             success={inputValid("postcode")}
             register={register("postcode", {
               required: "Obligatorio",
-              pattern: { value: POSTCODE_RE, message: "5 dígitos" },
+              pattern:  { value: POSTCODE_RE, message: "5 dígitos" },
             })}
             name="postcode"
             autoComplete="postal-code"
@@ -994,100 +594,423 @@ function CodForm({
         />
       </div>
 
-      {/* COD info box */}
-      <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 space-y-2">
-        <div className="flex items-center gap-2">
-          <Wallet className="w-4 h-4 text-amber-600" />
-          <span className="text-sm font-bold text-amber-800">Pago contra rembolso</span>
+      {/* ── Datos de pago ────────────────────────────────────────────────── */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-2 pb-1 border-b border-gray-200">
+          <div className="w-4 h-4 bg-[#2d6a2d] rounded-full flex items-center justify-center shrink-0">
+            <Lock className="w-2.5 h-2.5 text-white" />
+          </div>
+          <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wide">
+            Datos de pago
+          </h3>
+          <span className="ml-auto text-[12px] text-[#6b7280] whitespace-nowrap">
+            Encriptado con{" "}
+            <span className="font-semibold text-[#374151]">Stripe</span>
+          </span>
         </div>
-        <p className="text-xs text-amber-700 leading-relaxed">
-          Pagas el importe total al recibir el paquete. El repartidor acepta efectivo o tarjeta.
-          Recibirás un SMS con la fecha y franja horaria de entrega.
-        </p>
+
+        <div className="relative min-h-[180px]">
+          <PaymentElement
+            options={{
+              layout: "tabs",
+              paymentMethodOrder: ["apple_pay", "google_pay", "card", "klarna"],
+            }}
+            onReady={() => setPaymentReady(true)}
+          />
+          {!paymentReady && (
+            <div className="absolute inset-0 flex items-center justify-center bg-white/80 rounded-xl">
+              <Loader2 className="w-6 h-6 animate-spin text-[#487D26]" />
+            </div>
+          )}
+        </div>
       </div>
 
-      <Button
+      {/* ── Botón de pago ────────────────────────────────────────────────── */}
+      <button
         type="submit"
-        disabled={submitting}
-        className="w-full rounded-full h-12 bg-brand hover:bg-brand-hover text-white font-bold text-base shadow-[0_4px_14px_rgba(72,125,38,0.35)]"
+        disabled={submitting || !stripe || !elements || !paymentReady}
+        className={cn(
+          "w-full h-12 rounded-full font-bold text-base transition-all",
+          "flex items-center justify-center gap-2",
+          "bg-[#487D26] text-white shadow-[0_4px_14px_rgba(72,125,38,0.35)]",
+          "hover:bg-[#3a6420] disabled:opacity-60 disabled:cursor-not-allowed"
+        )}
       >
         {submitting ? (
           <>
-            <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-            Procesando...
+            <Loader2 className="w-5 h-5 animate-spin" />
+            Procesando pago...
           </>
         ) : (
           <>
-            <Truck className="w-5 h-5 mr-2" />
-            Confirmar pedido
+            <Lock className="w-5 h-5" />
+            Pagar — {formatPrice(totalCents)}
           </>
         )}
-      </Button>
+      </button>
     </form>
   );
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════ */
-/*  SUCCESS SCREEN                                                             */
+/*  COD FORM                                                                    */
 /* ═══════════════════════════════════════════════════════════════════════════ */
 
-function SuccessScreen({ onClose }: { onClose: () => void }) {
+function CodForm({
+  bundle,
+  onError,
+}: {
+  bundle: Bundle;
+  onError: (msg: string) => void;
+}) {
+  const [submitting, setSubmitting] = useState(false);
+  const router = useRouter();
+
+  const [SearchBox,    setSearchBox]    = useState<React.ComponentType<any> | null>(null);
+  const [addressValue, setAddressValue] = useState("");
+  const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? "";
+
+  const {
+    register,
+    handleSubmit,
+    watch,
+    setValue,
+    formState: { errors, touchedFields },
+  } = useForm<ShippingData>({ mode: "onTouched" });
+
+  const watched    = watch();
+  const inputValid = (f: keyof ShippingData) => !!touchedFields[f] && !errors[f] && !!watched[f];
+
   useEffect(() => {
-    const t = setTimeout(onClose, 3000);
-    return () => clearTimeout(t);
-  }, [onClose]);
+    if (!mapboxToken) {
+      console.error("[Mapbox] NEXT_PUBLIC_MAPBOX_TOKEN no está definido");
+      return;
+    }
+    import("@mapbox/search-js-react").then(mod => {
+      setSearchBox(() => mod.SearchBox as React.ComponentType<any>);
+    });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const onMapboxRetrieve = (result: any) => {
+    const feature = result.features?.[0];
+    if (!feature) return;
+    const props    = feature.properties;
+    const ctx      = props?.context;
+    const addrLine = props?.address_line1 ?? props?.name ?? "";
+    if (addrLine) {
+      setAddressValue(addrLine);
+      setValue("address", addrLine, { shouldValidate: true, shouldTouch: true });
+    }
+    if (ctx?.postcode?.name) setValue("postcode", ctx.postcode.name, { shouldValidate: true });
+    if (ctx?.place?.name)    setValue("city",     ctx.place.name,    { shouldValidate: true });
+    if (ctx?.region?.name)   setValue("province", ctx.region.name,   { shouldValidate: true });
+  };
+
+  const onSubmit = async (data: ShippingData) => {
+    if (data._hp) return;
+
+    setSubmitting(true);
+    onError("");
+
+    try {
+      const result = await createOrderAction({
+        customerData: {
+          fullName:   data.fullName,
+          phone:      data.phone.replace(/[\s\-]/g, ""),
+          address:    data.address,
+          postalCode: data.postcode,
+          city:       data.city,
+          province:   data.province,
+          email:      data.email,
+        },
+        bundleId:           bundle.id,
+        bundlePriceInCents: bundle.priceInCents,
+        paymentMethod:      "COD",
+      });
+
+      if (!result.success) {
+        console.error("[CodForm] createOrderAction failed:", result.error);
+        onError(result.error ?? "Error al crear el pedido.");
+        return;
+      }
+
+      const names = data.fullName.split(" ");
+
+      try {
+        sessionStorage.setItem("healzyp_order", JSON.stringify({
+          orderNumber:     result.orderNumber,
+          email:           data.email,
+          firstName:       names[0],
+          paymentMethod:   "cod",
+          items: [{
+            name:       bundle.name,
+            srcUrl:     "/images/FOTOPRODUCT1.png",
+            quantity:   1,
+            attributes: [],
+            price:      bundle.priceInCents / 100,
+            discount:   0,
+          }],
+          shippingAddress: {
+            firstName:  names[0],
+            lastName:   names.slice(1).join(" "),
+            address:    data.address,
+            apartment:  "",
+            postalCode: data.postcode,
+            city:       data.city,
+            province:   data.province,
+            country:    "España",
+          },
+          shippingMethod:   { name: "Envío estándar", estimatedDays: "3-5 días hábiles", price: 0 },
+          subtotalEur:      bundle.priceInCents / 100,
+          shippingCostEur:  0,
+          couponDiscountEur: 0,
+          totalEur:         bundle.priceInCents / 100,
+        }));
+      } catch {}
+
+      router.push("/order/confirmation");
+    } catch (e) {
+      console.error("[CodForm] unexpected error:", e);
+      onError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.9 }}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={{ type: "spring", stiffness: 300, damping: 24 }}
-      className="flex flex-col items-center text-center py-10 px-4"
-    >
-      <motion.div
-        initial={{ scale: 0 }}
-        animate={{ scale: 1 }}
-        transition={{ type: "spring", stiffness: 400, damping: 15, delay: 0.1 }}
-        className="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center mb-4"
+    <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-5">
+      {/* Honeypot */}
+      <input
+        type="text"
+        tabIndex={-1}
+        aria-hidden="true"
+        className="absolute opacity-0 h-0 w-0"
+        {...register("_hp")}
+      />
+
+      <div className="space-y-4">
+        <div className="flex items-center gap-2 pb-1 border-b border-gray-200">
+          <Package className="w-4 h-4 text-gray-500" />
+          <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wide">
+            Datos de envío
+          </h3>
+        </div>
+
+        <FormInput
+          label="Nombre completo"
+          placeholder="María García López"
+          error={errors.fullName?.message}
+          success={inputValid("fullName")}
+          register={register("fullName", {
+            required:  "Obligatorio",
+            minLength: { value: 2, message: "Mínimo 2 caracteres" },
+          })}
+          name="fullName"
+          autoComplete="name"
+        />
+
+        <FormInput
+          label="Email"
+          placeholder="maria@email.com"
+          type="email"
+          error={errors.email?.message}
+          success={inputValid("email")}
+          register={register("email", {
+            required: "Obligatorio",
+            pattern:  { value: EMAIL_RE, message: "Email no válido" },
+          })}
+          name="email"
+          autoComplete="email"
+        />
+
+        <FormInput
+          label="Teléfono"
+          placeholder="612 345 678"
+          type="tel"
+          error={errors.phone?.message}
+          success={inputValid("phone")}
+          register={register("phone", {
+            required: "Obligatorio",
+            pattern:  { value: PHONE_RE, message: "Teléfono no válido" },
+          })}
+          name="phone"
+          autoComplete="tel"
+        />
+
+        {/* Dirección con Mapbox SearchBox */}
+        <div className="space-y-1.5">
+          <label className="text-sm font-semibold text-gray-800 block">Dirección</label>
+          <div className="relative">
+            {SearchBox && mapboxToken ? (
+              <>
+                <input
+                  type="text"
+                  style={{ display: "none" }}
+                  {...register("address", {
+                    required:  "Obligatorio",
+                    minLength: { value: 5, message: "Demasiado corta" },
+                  })}
+                  readOnly
+                />
+                <SearchBox
+                  accessToken={mapboxToken}
+                  value={addressValue}
+                  onChange={(v: string) => {
+                    setAddressValue(v);
+                    setValue("address", v, { shouldValidate: true, shouldTouch: true });
+                  }}
+                  onRetrieve={onMapboxRetrieve}
+                  options={{ country: "es", language: "es" }}
+                  popoverOptions={{ renderIntoPortal: true }}
+                  placeholder="Calle Mayor 123, 2ºB"
+                  theme={{ cssText: MAPBOX_THEME_CSS }}
+                />
+              </>
+            ) : (
+              <input
+                type="text"
+                autoComplete="street-address"
+                placeholder="Calle Mayor 123, 2ºB"
+                className={addrInputCls(errors.address?.message, inputValid("address"))}
+                value={addressValue}
+                onChange={e => {
+                  setAddressValue(e.target.value);
+                  setValue("address", e.target.value, { shouldValidate: true, shouldTouch: true });
+                }}
+              />
+            )}
+            {inputValid("address") && !errors.address && (
+              <CheckCircle2 className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-emerald-500" />
+            )}
+          </div>
+          {errors.address && (
+            <p className="text-xs text-red-500 font-medium">{errors.address.message}</p>
+          )}
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <FormInput
+            label="Código Postal"
+            placeholder="28001"
+            error={errors.postcode?.message}
+            success={inputValid("postcode")}
+            register={register("postcode", {
+              required: "Obligatorio",
+              pattern:  { value: POSTCODE_RE, message: "5 dígitos" },
+            })}
+            name="postcode"
+            autoComplete="postal-code"
+          />
+          <FormInput
+            label="Ciudad"
+            placeholder="Madrid"
+            error={errors.city?.message}
+            success={inputValid("city")}
+            register={register("city", { required: "Obligatorio" })}
+            name="city"
+            autoComplete="address-level2"
+          />
+        </div>
+
+        <FormInput
+          label="Provincia"
+          placeholder="Madrid"
+          error={errors.province?.message}
+          success={inputValid("province")}
+          register={register("province", { required: "Obligatorio" })}
+          name="province"
+          autoComplete="address-level1"
+        />
+      </div>
+
+      {/* Info contra reembolso */}
+      <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 space-y-2">
+        <div className="flex items-center gap-2">
+          <Wallet className="w-4 h-4 text-amber-600" />
+          <span className="text-sm font-bold text-amber-800">Pago contra reembolso</span>
+        </div>
+        <p className="text-xs text-amber-700 leading-relaxed">
+          Pagas el importe total al recibir el paquete. El repartidor acepta
+          efectivo o tarjeta. Recibirás un SMS con la fecha y franja horaria de entrega.
+        </p>
+      </div>
+
+      <button
+        type="submit"
+        disabled={submitting}
+        className={cn(
+          "w-full h-12 rounded-full font-bold text-base transition-all",
+          "flex items-center justify-center gap-2",
+          "bg-[#487D26] text-white shadow-[0_4px_14px_rgba(72,125,38,0.35)]",
+          "hover:bg-[#3a6420] disabled:opacity-60 disabled:cursor-not-allowed"
+        )}
       >
-        <CheckCircle2 className="w-8 h-8 text-emerald-600" />
-      </motion.div>
-      <h3 className={cn(integralCF.className, "text-xl text-black mb-2")}>
-        ¡Pedido confirmado!
-      </h3>
-      <p className="text-sm text-black/60 max-w-[260px]">
-        Hemos recibido tu pedido correctamente. Te enviaremos un email de confirmación en breve.
-      </p>
-      <p className="text-xs text-black/40 mt-4">Cerrando...</p>
-    </motion.div>
+        {submitting ? (
+          <>
+            <Loader2 className="w-5 h-5 animate-spin" />
+            Procesando...
+          </>
+        ) : (
+          <>
+            <Truck className="w-5 h-5" />
+            Confirmar pedido
+          </>
+        )}
+      </button>
+    </form>
   );
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════ */
-/*  MAIN MODAL                                                                 */
+/*  MAIN MODAL                                                                  */
 /* ═══════════════════════════════════════════════════════════════════════════ */
 
 const CheckoutModal: React.FC<CheckoutModalProps> = ({ open, onOpenChange, method }) => {
-  const [bundle, setBundle] = useState<Bundle | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [submitted, setSubmitted] = useState(false);
+  const [bundle,              setBundle]              = useState<Bundle | null>(null);
+  const [clientSecret,        setClientSecret]        = useState<string | null>(null);
+  const [clientSecretLoading, setClientSecretLoading] = useState(false);
+  const [error,               setError]               = useState<string | null>(null);
+  const clientSecretCache = useRef<Record<number, string>>({});
 
   useEffect(() => {
-    if (open) {
-      setBundle(getStoredBundle());
-      setError(null);
-      setSubmitted(false);
-    }
-  }, [open]);
+    if (!open) return;
+    const b = getStoredBundle();
+    setBundle(b);
+    setError(null);
 
-  const handleSuccess = useCallback(() => setSubmitted(true), []);
-  const handleError = useCallback((msg: string) => setError(msg), []);
+    if (method === "card" && b) {
+      const cached = clientSecretCache.current[b.id];
+      if (cached) {
+        setClientSecret(cached);
+        return;
+      }
+      setClientSecretLoading(true);
+      fetch("/api/create-payment-intent", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ bundleId: b.id }),
+      })
+        .then(async res => {
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "Error del servidor");
+          clientSecretCache.current[b.id] = data.clientSecret;
+          setClientSecret(data.clientSecret);
+        })
+        .catch(err => {
+          console.error("[CheckoutModal] Error cargando clientSecret:", err);
+          setError("Hubo un problema al iniciar el pago. Inténtalo de nuevo.");
+        })
+        .finally(() => setClientSecretLoading(false));
+    }
+  }, [open, method]);
+
+  const handleError = useCallback((msg: string) => setError(msg || null), []);
 
   const handleClose = useCallback(() => {
     onOpenChange(false);
     setTimeout(() => {
-      setSubmitted(false);
       setError(null);
+      setClientSecret(null);
     }, 300);
   }, [onOpenChange]);
 
@@ -1103,26 +1026,27 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ open, onOpenChange, metho
           "w-full max-w-[95vw] sm:max-w-[500px] p-0 gap-0",
           "bg-white border border-black/10 shadow-2xl",
           "rounded-none sm:rounded-[20px]",
-          "h-[100dvh] sm:h-auto sm:max-h-[90vh] overflow-hidden flex flex-col"
+          "h-[100dvh] sm:h-auto sm:max-h-[90vh] overflow-visible flex flex-col"
         )}
       >
         <DialogTitle className="sr-only">
-          Checkout — {isCard ? "Pago con tarjeta" : "Contra rembolso"}
+          {isCard ? "Pago con tarjeta" : "Pago contra reembolso"}
         </DialogTitle>
         <DialogDescription className="sr-only">
           Completa tu compra de forma segura
         </DialogDescription>
 
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 bg-white shrink-0">
-          <div className="flex items-center gap-2">
-            {isCard ? (
-              <CreditCard className="w-5 h-5 text-brand" />
-            ) : (
-              <Wallet className="w-5 h-5 text-brand" />
-            )}
+        {/* ── Header ──────────────────────────────────────────────────────── */}
+        <div className="shrink-0 flex items-center justify-between px-5 py-4 border-b border-gray-100 bg-white">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-full bg-[#487D26]/10 flex items-center justify-center">
+              {isCard
+                ? <CreditCard className="w-4 h-4 text-[#487D26]" />
+                : <Wallet    className="w-4 h-4 text-[#487D26]" />
+              }
+            </div>
             <span className={cn(integralCF.className, "text-sm text-black")}>
-              Checkout — {isCard ? "Tarjeta" : "Contra rembolso"}
+              Checkout seguro
             </span>
           </div>
           <button
@@ -1134,69 +1058,71 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ open, onOpenChange, metho
           </button>
         </div>
 
-        {/*
-         * Elements lives HERE — outside every animated container.
-         * Stripe card iframes must never be inside a motion.div that
-         * animates opacity or transform: WebKit blocks pointer events
-         * to iframes when any ancestor has opacity < 1, and any CSS
-         * transform on an ancestor creates a stacking context that can
-         * bury iframes in other browsers.
-         */}
-        <Elements stripe={stripePromise}>
-          <div className="overflow-y-auto flex-1">
-            {submitted ? (
-              <SuccessScreen onClose={handleClose} />
-            ) : (
-              <div className="p-5 space-y-5">
-                {/* Order summary */}
-                <InlineOrderSummary bundle={bundle} isCard={isCard} />
+        {/* ── Body ────────────────────────────────────────────────────────── */}
+        <div className="overflow-y-auto flex-1">
+          <div className="p-5 space-y-5">
+            {/* Resumen colapsable en móvil, siempre visible en desktop */}
+            <OrderSummaryPanel bundle={bundle} isCard={isCard} />
 
-                {/* Error banner */}
-                <AnimatePresence>
-                  {error && (
-                    <motion.div
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: "auto" }}
-                      exit={{ opacity: 0, height: 0 }}
-                      className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 flex items-start gap-2"
-                    >
-                      <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
-                      <p className="text-xs text-red-700 leading-relaxed">{error}</p>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+            {/* Error banner */}
+            <AnimatePresence>
+              {error && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 flex items-start gap-2"
+                >
+                  <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+                  <p className="text-xs text-red-700 leading-relaxed">{error}</p>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
-                {/* Form — animation only affects layout, never the Stripe iframes */}
-                <AnimatePresence mode="wait">
-                  <motion.div
-                    key={method}
-                    initial={{ opacity: 0, x: isCard ? 20 : -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: isCard ? -20 : 20 }}
-                    transition={{ duration: 0.2 }}
+            {/* Formulario */}
+            <div key={method}>
+              {isCard ? (
+                clientSecretLoading ? (
+                  <SkeletonForm />
+                ) : clientSecret ? (
+                  <Elements
+                    stripe={stripePromise}
+                    options={{
+                      clientSecret,
+                      appearance: STRIPE_APPEARANCE,
+                      locale:     "es",
+                    }}
                   >
-                    {isCard ? (
-                      <CardFormInner bundle={bundle} onSuccess={handleSuccess} onError={handleError} />
-                    ) : (
-                      <CodForm bundle={bundle} onSuccess={handleSuccess} onError={handleError} />
-                    )}
-                  </motion.div>
-                </AnimatePresence>
-
-                {/* Security strip */}
-                <div className="flex flex-col items-center gap-2 pt-2 border-t border-gray-100">
-                  <div className="flex items-center gap-1.5 text-emerald-600">
-                    <ShieldCheck className="w-4 h-4" />
-                    <span className="text-xs font-bold">Pago 100% seguro · SSL encriptado</span>
+                    <CardForm bundle={bundle} onError={handleError} />
+                  </Elements>
+                ) : (
+                  <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3">
+                    <p className="text-sm text-red-700">
+                      No se pudo cargar el sistema de pago. Cierra el modal e inténtalo de nuevo.
+                    </p>
                   </div>
-                  <p className="text-[11px] text-gray-400 text-center leading-relaxed">
-                    Tus datos están protegidos. No compartimos tu información con terceros.
-                  </p>
-                </div>
+                )
+              ) : (
+                <CodForm bundle={bundle} onError={handleError} />
+              )}
+            </div>
+
+            {/* Security strip */}
+            <div className="flex flex-col items-center gap-2 pt-2 border-t border-gray-100">
+              <div className="flex items-center gap-1.5">
+                <ShieldCheck className="w-4 h-4 text-[#487D26]" />
+                <span className="text-[13px] font-medium text-gray-600">
+                  🛡️ Pago 100% seguro · SSL encriptado
+                </span>
               </div>
-            )}
+              <div className="flex items-center gap-4 mt-0.5">
+                <span className="text-[11px] font-bold tracking-[0.08em] text-[#9ca3af]">VISA</span>
+                <span className="text-[11px] font-bold tracking-[0.08em] text-[#9ca3af]">MASTERCARD</span>
+                <span className="text-[11px] font-bold tracking-[0.08em] text-[#9ca3af]">STRIPE</span>
+              </div>
+            </div>
           </div>
-        </Elements>
+        </div>
       </DialogContent>
     </Dialog>
   );

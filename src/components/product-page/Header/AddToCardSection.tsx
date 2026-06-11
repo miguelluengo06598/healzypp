@@ -12,10 +12,11 @@ import { getStoredBundle } from "@/components/checkout/OrderSummary";
 // La prop data se mantiene para no romper la firma que usa Header/index.tsx
 const AddToCardSection = ({ data }: { data: Product }) => {
   const router = useRouter();
-  const { trackInitiateCheckout } = useMetaPixel();
+  const { trackAddToCart, trackInitiateCheckout } = useMetaPixel();
 
   const handleCheckout = (path: string) => {
     const bundle = getStoredBundle();
+    trackAddToCart({ id: data.id, name: data.title, price: bundle.priceInCents / 100 });
     trackInitiateCheckout({
       value: bundle.priceInCents / 100,
       currency: 'EUR',

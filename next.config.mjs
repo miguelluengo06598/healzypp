@@ -11,7 +11,7 @@ const csp = [
   // Estilos: propio dominio + inline (Tailwind/Stripe Elements los necesita)
   "style-src 'self' 'unsafe-inline'",
   // Imágenes: propio dominio + Supabase Storage + Stripe + data URIs
-  "img-src 'self' data: blob: https://achzefxiylozwnuglvyz.supabase.co https://*.stripe.com",
+  "img-src 'self' data: blob: https://ahxfrlbookvbszrnclpq.supabase.co https://*.stripe.com",
   // Fuentes
   "font-src 'self' data:",
   // Conexiones: propio dominio + Stripe + Supabase + Mapbox
@@ -48,7 +48,7 @@ const nextConfig = {
       {
         // Supabase Storage — para imágenes de producto subidas desde el panel
         protocol: "https",
-        hostname: "achzefxiylozwnuglvyz.supabase.co",
+        hostname: "ahxfrlbookvbszrnclpq.supabase.co",
         pathname: "/storage/v1/object/public/**",
       },
     ],

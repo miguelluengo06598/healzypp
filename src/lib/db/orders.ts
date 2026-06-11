@@ -5,12 +5,11 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { createServiceClient, supabase } from '@/lib/supabase'
-import { sendOrderNotification } from '@/lib/notifications'
+import { sendPushover } from '@/lib/notifications/pushover'
+import { BUNDLES } from '@/lib/bundles'
 import type {
-  BundleRow,
   OrderRow,
   OrderItemRow,
-  CustomerRow,
   PaymentMethod,
 } from '@/types/database.types'
 
@@ -27,9 +26,11 @@ export interface CreateOrderInput {
     province: string
   }
   bundleId: number
+  bundlePriceInCents?: number
   paymentMethod: PaymentMethod
   stripePaymentIntentId?: string
   customerNotes?: string
+  userId?: string
 }
 
 export interface CreateOrderResult {
@@ -54,73 +55,98 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
     return { success: false, error: `Cliente Supabase no inicializado: ${msg}` }
   }
 
+  try {
   // ── 1. Obtener bundle ────────────────────────────────────────────────────
-  const { data: bundleRaw, error: bundleError } = await db
-    .from('bundles')
-    .select('id, name, price, product_id, products(id, title)')
-    .eq('id', input.bundleId)
-    .eq('active', true)
-    .single()
+  let bundle: {
+    id: number
+    name: string
+    price: number
+    product_id: number | null
+  } | null = null
 
-  if (bundleError || !bundleRaw) {
-    console.error('[createOrder] Error al obtener bundle:', bundleError)
-    return {
-      success: false,
-      error: `Bundle no encontrado. Supabase: ${bundleError?.message} | code: ${bundleError?.code} | hint: ${bundleError?.hint}`,
+  try {
+    const { data: bundleRaw, error: bundleError } = await db
+      .from('bundles')
+      .select('id, product_id, nombre, cantidad, precio, precio_original, ahorro, porcentaje_dto, precio_por_unidad, es_popular, orden, activo')
+      .eq('id', input.bundleId)
+      .eq('activo', true)
+      .single()
+
+    if (!bundleError && bundleRaw) {
+      const raw = bundleRaw as any
+      bundle = {
+        id: raw.id,
+        name: raw.nombre ?? 'Bundle',
+        price: Number(raw.precio ?? 0),
+        product_id: raw.product_id ?? null,
+      }
+    } else if (bundleError) {
+      console.warn('[createOrder] No se pudo leer bundle:', bundleError.message)
+    }
+  } catch (err) {
+    console.warn('[createOrder] No se pudo leer bundle:', err)
+  }
+
+  // Intentar leer el producto asociado de forma aislada (la tabla puede tener columnas distintas)
+  let product: { id: number; title: string } | null = null
+  if (bundle?.product_id) {
+    try {
+      const { data: productRaw, error: productError } = await db
+        .from('products')
+        .select('id, nombre')
+        .eq('id', bundle.product_id)
+        .single()
+      if (!productError && productRaw) {
+        const raw = productRaw as any
+        product = {
+          id: raw.id,
+          title: raw.nombre ?? 'Gominolas de vinagre de manzana',
+        }
+      }
+    } catch (err) {
+      console.warn('[createOrder] No se pudo leer producto:', err)
     }
   }
 
-  const bundle = bundleRaw as unknown as BundleRow & { products: { id: number; title: string } | null }
-  const product = bundle.products
-
-  // ── 2. Upsert cliente ────────────────────────────────────────────────────
-  const { data: existingRaw } = await db
-    .from('customers')
-    .select('id')
-    .eq('phone', input.customerData.phone)
-    .maybeSingle()
-
-  const existing = existingRaw as Pick<CustomerRow, 'id'> | null
-  let customerId: number
-
-  if (existing) {
-    customerId = existing.id
-    await db
-      .from('customers')
-      .update({
-        full_name:   input.customerData.fullName,
-        ...(input.customerData.email ? { email: input.customerData.email } : {}),
-        address:     input.customerData.address,
-        postal_code: input.customerData.postalCode,
-        city:        input.customerData.city,
-        province:    input.customerData.province,
-      })
-      .eq('id', customerId)
+  // Si Supabase no respondió, usar datos locales o el precio que envió el cliente
+  let unitPriceEur: number
+  let bundleName: string
+  if (bundle) {
+    unitPriceEur = bundle.price
+    bundleName = bundle.name
   } else {
-    const { data: newCustomerRaw, error: customerError } = await db
-      .from('customers')
-      .insert({
-        full_name:   input.customerData.fullName,
-        phone:       input.customerData.phone,
-        email:       input.customerData.email ?? null,
-        address:     input.customerData.address,
-        postal_code: input.customerData.postalCode,
-        city:        input.customerData.city,
-        province:    input.customerData.province,
-        country:     'España',
-      })
-      .select('id')
-      .single()
+    console.warn('[createOrder] Bundle no encontrado en Supabase, usando datos locales')
+    const localBundle = BUNDLES.find(b => b.id === input.bundleId)
+    const clientPriceEur =
+      typeof input.bundlePriceInCents === 'number' && input.bundlePriceInCents >= 0
+        ? input.bundlePriceInCents / 100
+        : null
+    unitPriceEur = clientPriceEur ?? (localBundle ? localBundle.priceInCents / 100 : 0)
+    bundleName = localBundle?.name ?? 'Bundle desconocido'
+  }
 
-    if (customerError || !newCustomerRaw) {
-      console.error('[createOrder] Error al insertar customer:', customerError)
-      return {
-        success: false,
-        error: `Error al registrar el cliente. Supabase: ${customerError?.message} | code: ${customerError?.code} | hint: ${customerError?.hint}`,
-      }
+  // ── 2. Upsert perfil en profiles solo si el usuario está autenticado ─
+  let profileId: string | null = input.userId ?? null
+
+  if (input.userId) {
+    try {
+      const nameParts = input.customerData.fullName.trim().split(/\s+/)
+      const nombre    = nameParts[0] ?? ''
+      const apellidos = nameParts.slice(1).join(' ') || null
+
+      await db
+        .from('profiles')
+        .upsert({
+          id: input.userId,
+          nombre,
+          ...(apellidos ? { apellidos } : {}),
+          telefono: input.customerData.phone,
+          email: input.customerData.email ?? null,
+        }, { onConflict: 'id' })
+    } catch (err) {
+      console.warn('[createOrder] Error en profiles upsert:', err)
+      profileId = null
     }
-
-    customerId = (newCustomerRaw as Pick<CustomerRow, 'id'>).id
   }
 
   // ── 3. Generar número de pedido ──────────────────────────────────────────
@@ -136,28 +162,31 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
   }
 
   // ── 4. Insertar pedido ───────────────────────────────────────────────────
+  const direccionEnvio = [
+    input.customerData.address,
+    input.customerData.postalCode,
+    input.customerData.city,
+    input.customerData.province,
+  ].filter(Boolean).join(', ')
+
   const { data: orderRaw, error: orderError } = await db
     .from('orders')
     .insert({
-      order_number:              orderNumber as string,
-      customer_id:               customerId,
-      shipping_name:             input.customerData.fullName,
-      shipping_phone:            input.customerData.phone,
-      shipping_address:          input.customerData.address,
-      shipping_postal:           input.customerData.postalCode,
-      shipping_city:             input.customerData.city,
-      shipping_province:         input.customerData.province,
-      shipping_country:          'España',
-      subtotal:                  bundle.price,
-      shipping_cost:             0,
-      total:                     bundle.price,
-      payment_method:            input.paymentMethod,
-      payment_status:            'PENDING',
-      paid_at:                   null,
-      stripe_payment_intent_id:  input.stripePaymentIntentId ?? null,
-      status:                    'PENDING',
-      customer_notes:            input.customerNotes ?? null,
-      admin_notes:               null,
+      numero_pedido:               orderNumber as string,
+      user_id:                     profileId,
+      email_cliente:               input.customerData.email ?? null,
+      nombre_cliente:              input.customerData.fullName,
+      telefono_cliente:            input.customerData.phone,
+      estado:                      'pendiente',
+      subtotal:                    unitPriceEur,
+      descuento:                   0,
+      gastos_envio:                0,
+      total:                       unitPriceEur,
+      metodo_pago:                 input.paymentMethod.toLowerCase(),
+      stripe_payment_intent_id:    input.stripePaymentIntentId ?? null,
+      cupon_id:                    null,
+      direccion_envio:             direccionEnvio,
+      notas_cliente:               input.customerNotes ?? null,
     })
     .select('id')
     .single()
@@ -176,40 +205,49 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
   const { error: itemError } = await db
     .from('order_items')
     .insert({
-      order_id:      orderId,
-      product_id:    product?.id ?? null,
-      product_title: product?.title ?? 'Gominolas de vinagre de manzana',
-      bundle_id:     bundle.id,
-      bundle_name:   bundle.name,
-      quantity:      1,
-      unit_price:    bundle.price,
-      discount:      0,
-      subtotal:      bundle.price,
+      order_id:        orderId,
+      product_id:      product?.id ?? null,
+      variant_id:      null,
+      nombre_producto: product?.title ?? 'Gominolas de vinagre de manzana',
+      imagen_producto: null,
+      cantidad:        1,
+      precio_unitario: unitPriceEur,
+      precio_total:    unitPriceEur,
     })
 
   if (itemError) {
     console.error('[createOrder] Error al insertar order_item:', itemError)
   }
 
-  // ── 6. Notificación ntfy (solo COD; CARD se notifica desde el webhook) ─
+  // ── 6. Insertar historial de tracking ───────────────────────────────────────
+  try {
+    await db.from('order_tracking').insert({
+      order_id: orderId,
+      estado: input.paymentMethod === 'COD' ? 'pendiente' : 'pagado',
+      descripcion: input.paymentMethod === 'COD'
+        ? 'Pedido recibido — pendiente de pago en entrega'
+        : 'Pago confirmado correctamente',
+    })
+  } catch (err) {
+    console.warn('[createOrder] Error al insertar order_tracking:', err)
+  }
+
+  // ── 7. Notificación Pushover (solo COD; CARD se notifica desde el webhook) ─
   if (input.paymentMethod === 'COD') {
-    // Fire-and-forget — no awaited para no bloquear la respuesta al cliente
-    sendOrderNotification({
-      orderNumber:   orderNumber as string,
-      customerName:  input.customerData.fullName,
-      customerPhone: input.customerData.phone,
-      customerEmail: input.customerData.email,
-      address:       input.customerData.address,
-      city:          input.customerData.city,
-      province:      input.customerData.province,
-      bundleName:    bundle.name,
-      totalEuros:    Number(bundle.price),
-      paymentMethod: 'COD',
-      status:        'new',
-    }).catch((e) => console.error('[createOrder] ntfy COD error:', e))
+    sendPushover({
+      title: '📦 Nuevo pedido COD',
+      message: `👤 ${input.customerData.fullName}\n📞 ${input.customerData.phone}\n💰 ${Number(unitPriceEur).toFixed(2)}€ · COD\n📍 ${input.customerData.address}, ${input.customerData.city}`,
+      priority: 1,
+      sound: 'cashregister',
+    }).catch((e) => console.error('[createOrder] Pushover COD error:', e))
   }
 
   return { success: true, orderNumber: orderNumber as string, orderId }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    console.error('[createOrder] Error inesperado:', e)
+    return { success: false, error: `Error inesperado al procesar el pedido: ${msg}` }
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -218,7 +256,7 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface OrderWithItems extends OrderRow {
-  order_items: Pick<OrderItemRow, 'id' | 'product_title' | 'bundle_name' | 'quantity' | 'unit_price' | 'subtotal'>[]
+  order_items: Pick<OrderItemRow, 'id' | 'nombre_producto' | 'cantidad' | 'precio_unitario' | 'precio_total'>[]
 }
 
 export async function getOrderByNumber(orderNumber: string): Promise<OrderWithItems | null> {
@@ -228,14 +266,13 @@ export async function getOrderByNumber(orderNumber: string): Promise<OrderWithIt
       *,
       order_items (
         id,
-        product_title,
-        bundle_name,
-        quantity,
-        unit_price,
-        subtotal
+        nombre_producto,
+        cantidad,
+        precio_unitario,
+        precio_total
       )
     `)
-    .eq('order_number', orderNumber)
+    .eq('numero_pedido', orderNumber)
     .single()
 
   if (error || !data) return null
@@ -257,9 +294,8 @@ export async function updateOrderPaymentStatus(
   const { error } = await db
     .from('orders')
     .update({
-      payment_status: status,
-      paid_at:        status === 'PAID' ? new Date().toISOString() : null,
-      status:         status === 'PAID' ? ('CONFIRMED' as const) : ('PENDING' as const),
+      estado:              status === 'PAID' ? 'pagado' : 'fallido',
+      fecha_actualizacion: new Date().toISOString(),
     })
     .eq('stripe_payment_intent_id', stripePaymentIntentId)
 
@@ -287,11 +323,10 @@ export async function getOrderByStripePaymentIntentId(
       *,
       order_items (
         id,
-        product_title,
-        bundle_name,
-        quantity,
-        unit_price,
-        subtotal
+        nombre_producto,
+        cantidad,
+        precio_unitario,
+        precio_total
       )
     `)
     .eq('stripe_payment_intent_id', stripePaymentIntentId)

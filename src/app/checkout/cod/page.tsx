@@ -15,7 +15,6 @@ import { createOrderAction } from "@/app/actions/orders";
 import Link from "next/link";
 import { FaCheckCircle } from "react-icons/fa";
 import { FaCircleXmark } from "react-icons/fa6";
-import { useMetaPixel } from "@/hooks/useMetaPixel";
 import OrderTimeline from "@/components/orders/OrderTimeline";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -83,7 +82,6 @@ export default function CodCheckoutPage() {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [orderError, setOrderError] = useState<string | null>(null);
-  const { trackPurchase } = useMetaPixel();
 
   useEffect(() => {
     setBundle(getStoredBundle());
@@ -129,7 +127,8 @@ export default function CodCheckoutPage() {
           city:       data.city,
           province:   data.province,
         },
-        bundleId:      bundle.id,
+        bundleId:           bundle.id,
+        bundlePriceInCents: bundle.priceInCents,
         paymentMethod: 'COD',
       });
 
@@ -140,29 +139,23 @@ export default function CodCheckoutPage() {
         return;
       }
 
-      // Meta Pixel: Purchase
-      trackPurchase({
-        orderId: result.orderId ?? 'cod-unknown',
-        orderNumber: result.orderNumber ?? 'cod-unknown',
-        value: bundle.priceInCents / 100,
-        currency: 'EUR',
-        items: [
-          {
-            id: bundle.id,
-            name: bundle.name,
-            quantity: 1,
-            price: bundle.priceInCents / 100,
-          },
-        ],
-        email: data.email || undefined,
-        phone: data.phone.replace(/[\s\-]/g, ''),
-        firstName: data.fullName.split(' ')[0],
-        lastName: data.fullName.split(' ').slice(1).join(' '),
-        city: data.city,
-        zip: data.postcode,
-      });
-
-      setSubmitted(true);
+      // Guardar en sessionStorage y redirigir a confirmación
+      try {
+        sessionStorage.setItem('healzyp_order', JSON.stringify({
+          orderNumber: result.orderNumber ?? 'cod-unknown',
+          email: data.email || '',
+          firstName: data.fullName.split(' ')[0],
+          paymentMethod: 'cod',
+          items: [{ name: bundle.name, srcUrl: '/icons/favericonweb.png', quantity: 1, attributes: [], price: bundle.priceInCents / 100, discount: 0 }],
+          shippingAddress: { firstName: data.fullName.split(' ')[0], lastName: data.fullName.split(' ').slice(1).join(' '), address: data.address, apartment: '', postalCode: data.postcode, city: data.city, province: data.province, country: 'España' },
+          shippingMethod: { name: 'Envío gratuito', estimatedDays: '2-4 días laborables', price: 0 },
+          subtotalEur: bundle.priceInCents / 100,
+          shippingCostEur: 0,
+          couponDiscountEur: 0,
+          totalEur: bundle.priceInCents / 100,
+        }));
+      } catch {}
+      router.push('/order/confirmation');
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       console.error('[COD checkout] excepción inesperada:', msg);
@@ -344,6 +337,19 @@ export default function CodCheckoutPage() {
                 <AddressAutofill
                   accessToken={mapboxToken}
                   options={{ country: "es", language: "es" }}
+                  popoverOptions={{
+                    placement: "bottom-start",
+                    flip: true,
+                    offset: 5,
+                  }}
+                  theme={{
+                    cssText: `
+                      .Results {
+                        z-index: 99999 !important;
+                        position: fixed !important;
+                      }
+                    `,
+                  }}
                   onRetrieve={(res: any) => {
                     const f = res.features?.[0]?.properties;
                     if (!f) return;

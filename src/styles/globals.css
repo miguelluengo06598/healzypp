@@ -86,3 +86,21 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════ */
+/*  Mapbox AddressAutofill dropdown — fix para que las sugerencias sean        */
+/*  clickables dentro de modales/drawers con overflow o stacking context.      */
+/* ═══════════════════════════════════════════════════════════════════════════ */
+.mapboxgl-ctrl-geocoder--suggestions,
+.mapbox-search-box-suggestions,
+[data-testid="search-box-suggestions"],
+.SearchBox__suggestions,
+.mbx-suggestions,
+mapbox-search-listbox .Results,
+mapbox-address-autofill .Results,
+.MapboxAddressAutofill .Results,
+.MapboxSearchListbox .Results,
+.Results {
+  z-index: 99999 !important;
+  position: fixed !important;
+}

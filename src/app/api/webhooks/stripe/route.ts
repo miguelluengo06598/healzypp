@@ -1,11 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { updateOrderPaymentStatus, getOrderByStripePaymentIntentId } from "@/lib/db/orders";
+import { createServiceClient } from "@/lib/supabase";
 import { sendOrderNotification } from "@/lib/notifications";
+import { sendPushover } from "@/lib/notifications/pushover";
+import { sendPurchaseCAPI } from "@/lib/meta/capi";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2026-04-22.dahlia",
 });
+
+function getCityFromOrder(order: any): string {
+  if (!order) return "";
+  if (order.city) return order.city;
+  if (order.shipping_city) return order.shipping_city;
+  if (typeof order.direccion_envio === "string") return order.direccion_envio;
+  if (order.direccion_envio?.ciudad) return order.direccion_envio.ciudad;
+  return "";
+}
 
 export async function POST(req: NextRequest) {
   const sig = req.headers.get("stripe-signature");
@@ -40,18 +52,61 @@ export async function POST(req: NextRequest) {
         const order = await getOrderByStripePaymentIntentId(pi.id);
         const firstItem = order?.order_items?.[0];
         sendOrderNotification({
-          orderNumber:      order?.order_number ?? pi.id,
-          customerName:     order?.shipping_name ?? 'Desconocido',
-          customerPhone:    order?.shipping_phone,
-          address:          order?.shipping_address,
-          city:             order?.shipping_city,
-          province:         order?.shipping_province,
-          bundleName:       firstItem?.bundle_name ?? pi.metadata?.bundleName ?? undefined,
+          orderNumber:      order?.numero_pedido ?? pi.id,
+          customerName:     order?.nombre_cliente ?? "Desconocido",
+          customerPhone:    order?.telefono_cliente ?? undefined,
+          address:          order?.direccion_envio,
+          bundleName:       firstItem?.nombre_producto ?? pi.metadata?.bundleName ?? undefined,
           totalEuros:       order ? Number(order.total) : pi.amount / 100,
-          paymentMethod:    'CARD',
-          status:           'confirmed',
+          paymentMethod:    "CARD",
+          status:           "confirmed",
           paymentIntentId:  pi.id,
         }).catch((e) => console.error("[stripe-webhook] ntfy CONFIRMED error:", e));
+
+        // Pushover — consulta explícita a Supabase tras actualizar el pedido
+        {
+          const db = createServiceClient();
+          const { data: so } = await db
+            .from("orders")
+            .select("id, numero_pedido, nombre_cliente, total, direccion_envio")
+            .eq("stripe_payment_intent_id", pi.id)
+            .single();
+
+          console.log('[Webhook] Orden encontrada para Pushover:', !!so, 'PI:', pi.id);
+
+          if (so) {
+            console.log('[Webhook] Intentando enviar Pushover...');
+            const direccion =
+              typeof so.direccion_envio === "object"
+                ? (so.direccion_envio as any)?.ciudad ?? ""
+                : String(so.direccion_envio ?? "");
+
+            sendPushover({
+              title: "💳 Pago con tarjeta recibido",
+              message:
+                `👤 ${so.nombre_cliente ?? "Desconocido"}\n` +
+                `📦 Pedido: #${so.numero_pedido ?? pi.id}\n` +
+                `💰 Total: ${Number(so.total ?? pi.amount / 100).toFixed(2)}€\n` +
+                `📍 ${direccion}\n` +
+                `✅ Pago confirmado por Stripe`,
+              priority: 1,
+              sound: "cashregister",
+              url: `https://healzyp.com/admin/orders/${so.id}`,
+              url_title: "Ver pedido",
+            }).catch((e) => console.error("[stripe-webhook] Pushover CONFIRMED error:", e));
+
+            // Meta CAPI Purchase — event_id determinístico para deduplicar con el browser
+            sendPurchaseCAPI({
+              orderNumber: so.numero_pedido ?? pi.id,
+              email:       order?.email_cliente ?? null,
+              phone:       order?.telefono_cliente ?? null,
+              firstName:   order?.nombre_cliente?.split(' ')[0] ?? null,
+              lastName:    order?.nombre_cliente?.split(' ').slice(1).join(' ') ?? null,
+              totalEur:    Number(so.total ?? pi.amount / 100),
+              contentIds:  pi.metadata?.bundleId ? [pi.metadata.bundleId] : [],
+            }).catch((e) => console.error("[stripe-webhook] CAPI Purchase error:", e));
+          }
+        }
         break;
       }
 
@@ -67,15 +122,27 @@ export async function POST(req: NextRequest) {
           pi.last_payment_error?.code ??
           "Motivo desconocido";
         sendOrderNotification({
-          orderNumber:     order?.order_number ?? pi.id,
-          customerName:    order?.shipping_name ?? 'Desconocido',
-          bundleName:      order?.order_items?.[0]?.bundle_name ?? pi.metadata?.bundleName ?? undefined,
+          orderNumber:     order?.numero_pedido ?? pi.id,
+          customerName:    order?.nombre_cliente ?? "Desconocido",
+          bundleName:      order?.order_items?.[0]?.nombre_producto ?? pi.metadata?.bundleName ?? undefined,
           totalEuros:      order ? Number(order.total) : pi.amount / 100,
-          paymentMethod:   'CARD',
-          status:          'failed',
+          paymentMethod:   "CARD",
+          status:          "failed",
           paymentIntentId: pi.id,
           failureReason,
         }).catch((e) => console.error("[stripe-webhook] ntfy FAILED error:", e));
+
+        // Pushover
+        sendPushover({
+          title: "❌ Pago con tarjeta fallido",
+          message:
+            `💳 Tarjeta rechazada\n` +
+            `📧 ${pi.receipt_email ?? "email desconocido"}\n` +
+            `💰 Importe: ${(pi.amount / 100).toFixed(2)}€\n` +
+            `❌ Motivo: ${pi.last_payment_error?.message ?? "desconocido"}`,
+          priority: 0,
+          sound: "falling",
+        }).catch((e) => console.error("[stripe-webhook] Pushover FAILED error:", e));
         break;
       }
 

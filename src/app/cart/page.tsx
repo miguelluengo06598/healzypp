@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import BreadcrumbCart from "@/components/cart-page/BreadcrumbCart";
 import ProductCard from "@/components/cart-page/ProductCard";
@@ -20,7 +20,7 @@ export default function CartPage() {
   );
 
   return (
-    <main className="pb-20">
+    <main>
       <div className="max-w-frame mx-auto px-4 xl:px-0">
         {cart && cart.items.length > 0 ? (
           <>
@@ -51,7 +51,7 @@ export default function CartPage() {
                 <div className="flex flex-col space-y-5">
                   <div className="flex items-center justify-between">
                     <span className="md:text-xl text-black/60">Subtotal</span>
-                    <span className="md:text-xl font-bold">€{totalPrice}</span>
+                    <span className="md:text-xl font-bold">â‚¬{totalPrice}</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="md:text-xl text-black/60">
@@ -62,12 +62,12 @@ export default function CartPage() {
                       %)
                     </span>
                     <span className="md:text-xl font-bold text-red-600">
-                      -€{Math.round(totalPrice - adjustedTotalPrice)}
+                      -â‚¬{Math.round(totalPrice - adjustedTotalPrice)}
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="md:text-xl text-black/60">
-                      Gastos de Envío
+                      Gastos de EnvÃ­o
                     </span>
                     <span className="md:text-xl font-bold">Gratis</span>
                   </div>
@@ -75,7 +75,7 @@ export default function CartPage() {
                   <div className="flex items-center justify-between">
                     <span className="md:text-xl text-black">Total</span>
                     <span className="text-xl md:text-2xl font-bold">
-                      €{Math.round(adjustedTotalPrice)}
+                      â‚¬{Math.round(adjustedTotalPrice)}
                     </span>
                   </div>
                 </div>
@@ -87,7 +87,7 @@ export default function CartPage() {
                     <InputGroup.Input
                       type="text"
                       name="code"
-                      placeholder="Añadir código promocional"
+                      placeholder="AÃ±adir cÃ³digo promocional"
                       className="bg-transparent placeholder:text-black/40"
                     />
                   </InputGroup>
@@ -114,7 +114,7 @@ export default function CartPage() {
         ) : (
           <div className="flex items-center flex-col text-gray-300 mt-32">
             <TbBasketExclamation strokeWidth={1} className="text-6xl" />
-            <span className="block mb-4">Tu carrito de compras está vacío.</span>
+            <span className="block mb-4">Tu carrito de compras estÃ¡ vacÃ­o.</span>
             <Button className="rounded-full w-24 bg-[#487D26] hover:bg-[#3a6620]" asChild>
               <Link href="/shop">Tienda</Link>
             </Button>

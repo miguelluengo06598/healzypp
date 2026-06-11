@@ -1,0 +1,19 @@
+
+> Healzyp@0.1.0 start
+> next start
+
+▲ Next.js 16.2.6
+- Local:         http://localhost:3457
+- Network:       http://192.168.1.37:3457
+✓ Ready in 171ms
+Error: Failed to find Server Action "40e1ea57524d11f7f608bd8e83d41545b517f85ed5". This request might be from an older or newer deployment.
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at ignore-listed frames
+[ratelimit] Redis error — permitiendo petición: Command failed: NOPERM this user has no permissions to run the 'evalsha' command or its subcommand
+[ratelimit] Redis error — permitiendo petición: Command failed: NOPERM this user has no permissions to run the 'evalsha' command or its subcommand
+[createOrder] Error al obtener bundle: {
+  code: '42703',
+  details: null,
+  hint: null,
+  message: 'column products_1.title does not exist'
+}

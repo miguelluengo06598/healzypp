@@ -43,6 +43,8 @@ interface CartsState {
   totalPrice: number;
   adjustedTotalPrice: number;
   action: "update" | "add" | "delete" | null;
+  paymentMethod: "card" | "cod" | null;
+  cardDiscount: number;
 }
 
 // Define the initial state using that type
@@ -51,6 +53,8 @@ const initialState: CartsState = {
   totalPrice: 0,
   adjustedTotalPrice: 0,
   action: null,
+  paymentMethod: null,
+  cardDiscount: 0,
 };
 
 export const cartsSlice = createSlice({
@@ -199,10 +203,21 @@ export const cartsSlice = createSlice({
       state.totalPrice = 0;
       state.adjustedTotalPrice = 0;
       state.action = null;
+      state.paymentMethod = null;
+      state.cardDiscount = 0;
+    },
+    setPaymentMethod: (
+      state,
+      action: PayloadAction<{ method: "card" | "cod"; totalEur: number }>
+    ) => {
+      state.paymentMethod = action.payload.method;
+      state.cardDiscount =
+        action.payload.method === "card" && action.payload.totalEur > 20 ? 5 : 0;
     },
   },
 });
 
-export const { addToCart, removeCartItem, remove, clearCart } = cartsSlice.actions;
+export const { addToCart, removeCartItem, remove, clearCart, setPaymentMethod } =
+  cartsSlice.actions;
 
 export default cartsSlice.reducer;

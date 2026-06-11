@@ -4,7 +4,7 @@ import React, { useCallback, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
 import Link from "next/link";
-import { Heart, ShoppingBag, Check, Flame, ArrowRight } from "lucide-react";
+import { Heart, ShoppingBag, Flame, ArrowRight } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -73,7 +73,6 @@ const ProductCard = ({ data }: ProductCardProps) => {
   const [isWishlisted, setIsWishlisted] = useState(false);
   const [previewIndex, setPreviewIndex] = useState(0);
   const [selectedPackIdx, setSelectedPackIdx] = useState(1); // default: 2 packs (most popular)
-  const [justAdded, setJustAdded] = useState(false);
 
   const selectedBundle = BUNDLES[selectedPackIdx];
 
@@ -128,10 +127,6 @@ const ProductCard = ({ data }: ProductCardProps) => {
           quantity: 1,
         })
       );
-
-      setJustAdded(true);
-      const t = setTimeout(() => setJustAdded(false), 1500);
-      return () => clearTimeout(t);
     },
     [dispatch, data, selectedBundle, bundlePrice]
   );
@@ -400,24 +395,10 @@ const ProductCard = ({ data }: ProductCardProps) => {
           >
             <Button
               onClick={handleAddToCart}
-              className={cn(
-                "w-full rounded-full font-bold h-11 shadow-[0_4px_14px_rgba(72,125,38,0.35)] transition-all",
-                justAdded
-                  ? "bg-green-600 hover:bg-green-700 text-white"
-                  : "bg-brand hover:bg-brand-hover text-white"
-              )}
+              className="w-full rounded-full font-bold h-11 shadow-[0_4px_14px_rgba(72,125,38,0.35)] transition-all bg-brand hover:bg-brand-hover text-white"
             >
-              {justAdded ? (
-                <>
-                  <Check className="w-4 h-4 mr-2" />
-                  Añadido
-                </>
-              ) : (
-                <>
-                  <ShoppingBag className="w-4 h-4 mr-2" />
-                  Añadir {selectedBundle.name}
-                </>
-              )}
+              <ShoppingBag className="w-4 h-4 mr-2" />
+              Añadir {selectedBundle.name}
             </Button>
           </motion.div>
 

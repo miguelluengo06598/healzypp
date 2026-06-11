@@ -19,19 +19,6 @@ import ShippingMethodSection from "@/components/checkout/ShippingMethodSection"
 import PaymentSection from "@/components/checkout/PaymentSection"
 import CartOrderSummary from "@/components/checkout/CartOrderSummary"
 
-const stripeOptions = {
-  appearance: {
-    theme: "flat" as const,
-    variables: {
-      fontFamily: "inherit",
-      fontSizeBase: "14px",
-      colorText: "#111111",
-      colorTextPlaceholder: "#9CA3AF",
-      colorDanger: "#ef4444",
-    },
-  },
-}
-
 export default function CheckoutPage() {
   const router = useRouter()
   const dispatch = useAppDispatch()
@@ -222,7 +209,7 @@ export default function CheckoutPage() {
             {/* Step 4: Payment */}
             {checkout.step >= 4 && (
               stripePromise ? (
-                <Elements stripe={stripePromise} options={stripeOptions}>
+                <Elements stripe={stripePromise}>
                   <PaymentSection
                     totalEur={totalEur}
                     loading={paymentLoading}

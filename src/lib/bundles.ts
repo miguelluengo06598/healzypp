@@ -15,6 +15,7 @@ export const BUNDLES: Bundle[] = [
   { id: 1, name: "1 Bote",  price: "29,99€", priceInCents: 2999, popular: false },
   { id: 2, name: "2 Botes", price: "49,99€", priceInCents: 4999, popular: true  },
   { id: 3, name: "3 Botes", price: "59,99€", priceInCents: 5999, popular: false },
+
 ];
 
 export const BASE_UNIT_PRICE_EUR = 29.99;

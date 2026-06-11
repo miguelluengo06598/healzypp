@@ -1,6 +1,9 @@
 import { Metadata } from "next";
 import Link from "next/link";
 import { ReactNode } from "react";
+import { redirect } from "next/navigation";
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
 import {
   ShoppingBag,
   Ticket,
@@ -17,7 +20,26 @@ const navItems = [
   { href: "/account/profile", label: "Mis datos", icon: UserCircle },
 ];
 
-export default function AccountLayout({ children }: { children: ReactNode }) {
+export default async function AccountLayout({ children }: { children: ReactNode }) {
+  const cookieStore = await cookies();
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll();
+        },
+      },
+    }
+  );
+
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/?login=true");
+  }
+
   return (
     <div className="min-h-[60vh] bg-gray-50">
       <div className="max-w-frame mx-auto px-4 xl:px-0 py-8 md:py-12">

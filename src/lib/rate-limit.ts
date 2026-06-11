@@ -1,10 +1,12 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// Rate limiting con Upstash Redis — compatible con arquitectura serverless
-// en Vercel (múltiples instancias sin estado compartido).
+// Rate limiting con Upstash Redis — compatible con arquitectura serverless.
 //
 // Requiere variables de entorno:
-//   UPSTASH_REDIS_REST_URL
-//   UPSTASH_REDIS_REST_TOKEN
+//   UPSTASH_REDIS_REST_URL=https://xxx.upstash.io
+//   UPSTASH_REDIS_REST_TOKEN=AXxxxx...
+//
+// Si Redis falla (p. ej. NOPERM, red, timeout) la llamada a .limit() devuelve
+// success:true y loggea el error — el checkout nunca se rompe por Redis.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { Ratelimit } from "@upstash/ratelimit";
@@ -12,29 +14,31 @@ import { Redis } from "@upstash/redis";
 import { headers } from "next/headers";
 import type { NextRequest } from "next/server";
 
-const hasRedis = !!(
-  process.env.UPSTASH_REDIS_REST_URL &&
-  process.env.UPSTASH_REDIS_REST_TOKEN
-);
+// ─── Validación de variables de entorno ──────────────────────────────────────
 
-if (!hasRedis) {
-  console.warn(
-    "[rate-limit] Upstash Redis no configurado: rate limiting desactivado. " +
-    "Configura UPSTASH_REDIS_REST_URL y UPSTASH_REDIS_REST_TOKEN en .env.local"
+const REDIS_URL   = process.env.UPSTASH_REDIS_REST_URL;
+const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
+
+if (!REDIS_URL || !REDIS_TOKEN) {
+  console.error(
+    "[rate-limit] ⚠️  UPSTASH_REDIS_REST_URL o UPSTASH_REDIS_REST_TOKEN no están configuradas. " +
+    "El rate limiting está DESACTIVADO. Añádelas a .env.local:\n" +
+    "  UPSTASH_REDIS_REST_URL=https://xxx.upstash.io\n" +
+    "  UPSTASH_REDIS_REST_TOKEN=AXxxxx..."
   );
 }
 
-const redis = hasRedis
-  ? new Redis({
-      url: process.env.UPSTASH_REDIS_REST_URL!,
-      token: process.env.UPSTASH_REDIS_REST_TOKEN!,
-    })
+// ─── Cliente Redis ────────────────────────────────────────────────────────────
+
+const redis = REDIS_URL && REDIS_TOKEN
+  ? new Redis({ url: REDIS_URL, token: REDIS_TOKEN })
   : null;
 
-// Limiter de no-op cuando Redis no está disponible: siempre permite el paso
+// ─── No-op limiter cuando Redis no está disponible ───────────────────────────
+
 const noopLimiter = {
   limit: async (_id: string) => ({
-    success: true,
+    success: true as const,
     limit: 0,
     remaining: 0,
     reset: 0,
@@ -42,21 +46,50 @@ const noopLimiter = {
   }),
 };
 
-function makeRatelimit<W extends string>(requests: number, window: W) {
+// ─── Factory: crea un limiter con fixedWindow y try/catch incorporado ─────────
+//
+// fixedWindow no usa scripts Lua (EVALSHA), por lo que es compatible con
+// cualquier plan de Upstash, incluidos los que tienen NOPERM para evalsha.
+// analytics: false evita llamadas extra a Redis.
+
+function makeRatelimit(requests: number, window: string) {
   if (!redis) return noopLimiter as unknown as Ratelimit;
-  return new Ratelimit({
+
+  const rl = new Ratelimit({
     redis,
-    limiter: Ratelimit.slidingWindow(
+    limiter: Ratelimit.fixedWindow(
       requests,
-      window as unknown as Parameters<typeof Ratelimit.slidingWindow>[1]
+      window as Parameters<typeof Ratelimit.fixedWindow>[1]
     ),
-    analytics: true,
+    analytics: false,
   });
+
+  // Envuelve limit() para que un fallo de Redis nunca rompa el servidor.
+  // Si Redis lanza (NOPERM, timeout, red), dejamos pasar la petición y loggeamos.
+  return {
+    limit: async (id: string) => {
+      try {
+        return await rl.limit(id);
+      } catch (err) {
+        console.error(
+          "[ratelimit] Redis error — permitiendo petición:",
+          err instanceof Error ? err.message : String(err)
+        );
+        return {
+          success: true as const,
+          limit: requests,
+          remaining: requests,
+          reset: 0,
+          pending: Promise.resolve(),
+        };
+      }
+    },
+  } as unknown as Ratelimit;
 }
 
 // ─── Instancias pre-configuradas ─────────────────────────────────────────────
 
-/** POST /api/create-payment-intent */
+/** POST /api/create-payment-intent y /api/checkout/create-payment-intent */
 export const paymentIntentRatelimit = makeRatelimit(10, "1 h");
 
 /** POST /api/track */
@@ -108,6 +141,6 @@ export function rateLimitResponse(
       "X-RateLimit-Remaining": String(remaining),
       "Retry-After": String(Math.max(0, Math.ceil((reset - Date.now()) / 1000))),
     },
-    body: { error: "Demasiados intentos. Inténtalo más tarde." },
+    body: { error: "Demasiados intentos. Espera un momento." },
   };
 }
