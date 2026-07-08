@@ -45,6 +45,16 @@ function getFbq(): Window['fbq'] | null {
   return null
 }
 
+function getFbCookies(): { fbc?: string; fbp?: string } {
+  if (typeof document === 'undefined') return {}
+  const fbc = document.cookie.match(/_fbc=([^;]+)/)?.[1]
+  const fbp = document.cookie.match(/_fbp=([^;]+)/)?.[1]
+  return {
+    ...(fbc ? { fbc } : {}),
+    ...(fbp ? { fbp } : {}),
+  }
+}
+
 async function sendCAPI(
   eventName: string,
   eventId: string,
@@ -59,7 +69,7 @@ async function sendCAPI(
         event_name: eventName,
         event_id:   eventId,
         event_data: customData,
-        user_data:  userData ?? {},
+        user_data:  { ...getFbCookies(), ...(userData ?? {}) },
       }),
       keepalive: true,
     })
