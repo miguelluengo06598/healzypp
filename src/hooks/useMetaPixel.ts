@@ -126,11 +126,12 @@ export function useMetaPixel() {
   const trackViewContent = useCallback(
     (product: ProductData) => {
       track('ViewContent', {
-        content_ids:  [product.slug ?? String(product.id)],
+        content_ids:  [String(product.id)],
         content_name: product.name,
         content_type: 'product',
         value:        product.price,
         currency:     product.currency ?? 'EUR',
+        content_slug: product.slug,
       })
     },
     [track]
@@ -139,7 +140,7 @@ export function useMetaPixel() {
   const trackAddToCart = useCallback(
     (product: ProductData, quantity = 1) => {
       track('AddToCart', {
-        content_ids:  [product.slug ?? String(product.id)],
+        content_ids:  [String(product.id)],
         content_name: product.name,
         content_type: 'product',
         value:        product.price * quantity,
