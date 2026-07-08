@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import Link from "next/link";
 import { useCookieConsent } from "@/hooks/useCookieConsent";
 
 /**
@@ -22,7 +23,14 @@ export default function CookieBanner() {
             <strong className="text-black">cookies técnicas</strong> necesarias
             para el funcionamiento de la tienda y, con tu consentimiento,{" "}
             <strong className="text-black">cookies de análisis</strong> para
-            mejorar tu experiencia.
+            mejorar tu experiencia.{" "}
+            <Link
+              href="/privacy"
+              className="underline hover:text-black transition-colors"
+            >
+              Más información
+            </Link>
+            .
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">

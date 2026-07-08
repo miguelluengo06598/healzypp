@@ -6,29 +6,13 @@ import React from "react";
 import { useRouter } from "next/navigation";
 import { Product } from "@/types/product.types";
 import PaymentIcons from "@/components/common/PaymentIcons";
-import { useMetaPixel } from "@/hooks/useMetaPixel";
-import { getStoredBundle } from "@/components/checkout/OrderSummary";
 
 // La prop data se mantiene para no romper la firma que usa Header/index.tsx
 const AddToCardSection = ({ data }: { data: Product }) => {
   const router = useRouter();
-  const { trackAddToCart, trackInitiateCheckout } = useMetaPixel();
 
   const handleCheckout = (path: string) => {
-    const bundle = getStoredBundle();
-    trackAddToCart({ id: data.id, name: data.title, price: bundle.priceInCents / 100 });
-    trackInitiateCheckout({
-      value: bundle.priceInCents / 100,
-      currency: 'EUR',
-      items: [
-        {
-          id: data.id,
-          name: `${data.title} — ${bundle.name}`,
-          quantity: 1,
-          price: bundle.priceInCents / 100,
-        },
-      ],
-    });
+    // Tracking centralizado en CheckoutActions (componente activo en producción).
     router.push(path);
   };
 
