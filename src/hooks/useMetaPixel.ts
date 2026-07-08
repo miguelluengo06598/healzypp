@@ -152,14 +152,19 @@ export function useMetaPixel() {
     [track]
   )
 
-  /** Dispara Purchase en navegador + CAPI con el event_id indicado.
-   *  Pasar `purchase_${orderNumber}` garantiza deduplicación con el CAPI del servidor. */
+  /**
+   * Dispara Purchase SOLO en el pixel de navegador (fbq).
+   * El CAPI lo envía el servidor (webhook Stripe o server action COD) con el
+   * mismo event_id determinístico → Meta deduplica automáticamente browser+CAPI.
+   * No llamar a sendCAPI aquí evita el triple envío que generaba doble conteo.
+   */
   const trackPurchase = useCallback(
     (order: OrderData, overrideEventId?: string) => {
+      if (!enabled) return
       const eventId = overrideEventId ?? getPurchaseEventId(order.orderNumber)
-      track(
-        'Purchase',
-        {
+      const fbq = getFbq()
+      if (fbq) {
+        fbq('track', 'Purchase', {
           content_ids:  order.items.map((i) => String(i.id)),
           content_name: 'Compra HEALZYP',
           content_type: 'product',
@@ -167,12 +172,10 @@ export function useMetaPixel() {
           currency:     order.currency,
           num_items:    order.items.reduce((sum, i) => sum + i.quantity, 0),
           order_id:     order.orderNumber,
-        },
-        order,
-        eventId
-      )
+        }, { eventID: eventId })
+      }
     },
-    [track]
+    [enabled]
   )
 
   return {
