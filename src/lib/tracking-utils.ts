@@ -164,12 +164,7 @@ export function clearQueue() {
 
 export function hasConsent(): boolean {
   if (typeof localStorage === 'undefined') return false
-  return localStorage.getItem(CONSENT_KEY) === 'true'
-}
-
-export function setConsent(granted: boolean) {
-  if (typeof localStorage === 'undefined') return
-  localStorage.setItem(CONSENT_KEY, granted ? 'true' : 'false')
+  return localStorage.getItem(CONSENT_KEY) === 'granted'
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
