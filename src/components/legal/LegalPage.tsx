@@ -1,9 +1,9 @@
-﻿import React from "react";
+import React from "react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { integralCF } from "@/styles/fonts";
 
-// â”€â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Types ─────────────────────────────────────────────────────────────────
 
 export interface LegalSection {
   title: string;
@@ -18,7 +18,7 @@ interface LegalPageProps {
   breadcrumb: { label: string; href: string }[];
 }
 
-// â”€â”€â”€ Component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Component ─────────────────────────────────────────────────────────────
 
 export default function LegalPage({
   title,
@@ -67,7 +67,7 @@ export default function LegalPage({
             </p>
           )}
           <p className="text-sm text-black/40 mt-4">
-            Ãšltima actualizaciÃ³n:{" "}
+            Última actualización:{" "}
             <span className="font-medium text-black/60">{lastUpdated}</span>
           </p>
         </div>
@@ -76,7 +76,7 @@ export default function LegalPage({
 
         {/* Two-column layout on large screens: TOC + content */}
         <div className="flex flex-col lg:flex-row gap-10 lg:gap-16 items-start">
-          {/* Table of contents â€” sticky on desktop */}
+          {/* Table of contents — sticky on desktop */}
           <aside className="hidden lg:block w-[240px] shrink-0 sticky top-8">
             <p className="text-xs font-medium uppercase tracking-widest text-black/40 mb-4">
               Contenido
