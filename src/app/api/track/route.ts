@@ -98,6 +98,47 @@ const HeartbeatEventSchema = BaseEventSchema.extend({
   eventType: z.literal('heartbeat'),
 })
 
+const SessionStartEventSchema = BaseEventSchema.extend({
+  eventType: z.literal('session_start'),
+})
+
+const ProductPageEnterEventSchema = BaseEventSchema.extend({
+  eventType: z.literal('product_page_enter'),
+  productId: z.number().int().positive(),
+  productSlug: z.string(),
+})
+
+const ProductSectionViewEventSchema = BaseEventSchema.extend({
+  eventType: z.literal('product_section_view'),
+  productId: z.number().int().positive(),
+  productSlug: z.string(),
+  section: z.string(),
+})
+
+const ProductScrollDepthEventSchema = BaseEventSchema.extend({
+  eventType: z.literal('product_scroll_depth'),
+  productId: z.number().int().positive(),
+  productSlug: z.string(),
+  depthPercent: z.number(),
+})
+
+const ProductInteractionEventSchema = BaseEventSchema.extend({
+  eventType: z.literal('product_interaction'),
+  productId: z.number().int().positive(),
+  productSlug: z.string(),
+  action: z.enum(['add_to_cart', 'buy_now', 'bundle_select', 'scroll']),
+  extra: z.record(z.string(), z.unknown()).optional(),
+})
+
+const ProductPageExitEventSchema = BaseEventSchema.extend({
+  eventType: z.literal('product_page_exit'),
+  productId: z.number().int().positive(),
+  productSlug: z.string(),
+  totalSeconds: z.number(),
+  lastSection: z.string(),
+  maxScrollPercent: z.number(),
+})
+
 const EventSchema = z.discriminatedUnion('eventType', [
   PageViewEventSchema,
   ProductViewEventSchema,
@@ -106,6 +147,12 @@ const EventSchema = z.discriminatedUnion('eventType', [
   ConversionEventSchema,
   AbandonmentEventSchema,
   HeartbeatEventSchema,
+  SessionStartEventSchema,
+  ProductPageEnterEventSchema,
+  ProductSectionViewEventSchema,
+  ProductScrollDepthEventSchema,
+  ProductInteractionEventSchema,
+  ProductPageExitEventSchema,
 ])
 
 const BatchSchema = z.object({
@@ -302,6 +349,19 @@ async function persistEvent(
     case 'heartbeat':
       // No persistimos heartbeat; solo sirve para mantener sesión viva
       return { data: null, error: null }
+
+    case 'session_start':
+    case 'product_page_enter':
+    case 'product_section_view':
+    case 'product_scroll_depth':
+    case 'product_interaction':
+    case 'product_page_exit':
+      // Sin tabla dedicada propia: se guardan como evento crudo en tracking_events
+      return supabase.from('tracking_events').insert({
+        session_id: base.session_id,
+        event_type: event.eventType,
+        payload: event as unknown as Record<string, unknown>,
+      })
 
     default:
       // Guardar evento crudo como fallback (nunca debería llegar aquí)
