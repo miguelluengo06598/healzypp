@@ -1,4 +1,4 @@
-import { newArrivalsData, relatedProductData } from "@/data/products";
+import { getActiveProducts, getProductBySlug } from "@/lib/db/products";
 import ProductListSec from "@/components/common/ProductListSec";
 import BreadcrumbProduct from "@/components/product-page/BreadcrumbProduct";
 import Header from "@/components/product-page/Header";
@@ -8,21 +8,20 @@ import ProductMetaTracker from "@/components/tracking/ProductMetaTracker";
 import ProductSectionWrapper from "@/components/tracking/ProductSectionWrapper";
 import { notFound } from "next/navigation";
 
-const data = newArrivalsData;
-
 export default async function ProductPage({
   params,
 }: {
   params: Promise<{ slug: string[] }>;
 }) {
   const { slug } = await params;
-  const productData = data.find(
-    (product) => product.id === Number(slug[0])
-  );
+  const productData = await getProductBySlug(slug[0]);
 
-  if (!productData?.title) {
+  if (!productData) {
     notFound();
   }
+
+  const allProducts = await getActiveProducts();
+  const relatedProducts = allProducts.filter((p) => p.slug !== productData.slug);
 
   return (
     <main>
@@ -49,7 +48,7 @@ export default async function ProductPage({
 
       <ProductSectionWrapper section="footer">
         <div className="mb-[50px] sm:mb-20">
-          <ProductListSec title="You might also like" data={relatedProductData} />
+          <ProductListSec title="You might also like" data={relatedProducts} />
         </div>
       </ProductSectionWrapper>
     </main>

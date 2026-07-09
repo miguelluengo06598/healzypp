@@ -2,17 +2,19 @@ import ProductListSec from "@/components/common/ProductListSec";
 import Brands from "@/components/homepage/Brands";
 import HeroSectionDynamica from "@/components/homepage/HeroSectionDynamica";
 import HealzypBrand from "@/components/homepage/HealzypBrand";
-import { newArrivalsData, topSellingData } from "@/data/products";
+import { getActiveProducts } from "@/lib/db/products";
 
-export default function Home() {
+export default async function Home() {
+  const products = await getActiveProducts();
+
   return (
     <>
-      <HeroSectionDynamica />
+      <HeroSectionDynamica featuredProduct={products[0] ?? null} />
       <Brands />
       <main className="my-[50px] sm:my-[72px]">
         <ProductListSec
           title="NEW ARRIVALS"
-          data={newArrivalsData}
+          data={products}
           viewAllLink="/shop#new-arrivals"
         />
         <div className="max-w-frame mx-auto px-4 xl:px-0">
@@ -21,7 +23,7 @@ export default function Home() {
         <div className="mb-[50px] sm:mb-20">
           <ProductListSec
             title="top selling"
-            data={topSellingData}
+            data={products}
             viewAllLink="/shop#top-selling"
           />
         </div>
