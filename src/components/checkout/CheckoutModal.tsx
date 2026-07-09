@@ -21,8 +21,6 @@ import {
   Lock,
   Package,
   ShieldCheck,
-  Truck,
-  Wallet,
   X,
 } from "lucide-react";
 
@@ -36,7 +34,6 @@ import {
 
 import { createOrderAction } from "@/app/actions/orders";
 import {
-  CARD_DISCOUNT_CENTS,
   formatPrice,
   getStoredBundle,
   type Bundle,
@@ -124,7 +121,6 @@ const MAPBOX_THEME_CSS = `
 export interface CheckoutModalProps {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  method: "cod" | "card";
 }
 
 interface ShippingData {
@@ -142,10 +138,9 @@ interface ShippingData {
 /*  ORDER SUMMARY PANEL                                                         */
 /* ═══════════════════════════════════════════════════════════════════════════ */
 
-function OrderSummaryPanel({ bundle, isCard }: { bundle: Bundle; isCard: boolean }) {
+function OrderSummaryPanel({ bundle }: { bundle: Bundle }) {
   const [expanded, setExpanded] = useState(false);
-  const discount = isCard ? CARD_DISCOUNT_CENTS : 0;
-  const total    = Math.max(0, bundle.priceInCents - discount);
+  const total = bundle.priceInCents;
 
   return (
     <div className="bg-[#F7F8F5] rounded-xl border border-black/[0.08] overflow-hidden">
@@ -183,12 +178,6 @@ function OrderSummaryPanel({ bundle, isCard }: { bundle: Bundle; isCard: boolean
             <span>Envío</span>
             <span className="text-emerald-600 font-semibold text-xs">GRATIS</span>
           </div>
-          {isCard && (
-            <div className="flex justify-between text-emerald-600">
-              <span className="font-medium">Descuento tarjeta</span>
-              <span className="font-semibold">-{formatPrice(discount)}</span>
-            </div>
-          )}
         </div>
         <div className="border-t border-black/10 pt-2 flex justify-between items-center">
           <span className="font-bold text-black">Total a pagar</span>
@@ -318,7 +307,7 @@ function CardForm({
 
   const watched    = watch();
   const inputValid = (f: keyof ShippingData) => !!touchedFields[f] && !errors[f] && !!watched[f];
-  const totalCents = Math.max(0, bundle.priceInCents - CARD_DISCOUNT_CENTS);
+  const totalCents = bundle.priceInCents;
 
   useEffect(() => {
     if (!mapboxToken) {
@@ -412,7 +401,6 @@ function CardForm({
           orderNumber:     orderResult.orderNumber ?? paymentIntent.id,
           email:           data.email,
           firstName:       names[0],
-          paymentMethod:   "card",
           items: [{
             name:       bundle.name,
             srcUrl:     "/images/FOTOPRODUCT1.png",
@@ -434,7 +422,7 @@ function CardForm({
           shippingMethod:    { name: "Envío gratuito", estimatedDays: "2-4 días laborables", price: 0 },
           subtotalEur:       bundle.priceInCents / 100,
           shippingCostEur:   0,
-          couponDiscountEur: CARD_DISCOUNT_CENTS / 100,
+          couponDiscountEur: 0,
           totalEur:          totalCents / 100,
         }));
       } catch {}
@@ -653,319 +641,10 @@ function CardForm({
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════ */
-/*  COD FORM                                                                    */
-/* ═══════════════════════════════════════════════════════════════════════════ */
-
-function CodForm({
-  bundle,
-  onError,
-}: {
-  bundle: Bundle;
-  onError: (msg: string) => void;
-}) {
-  const [submitting, setSubmitting] = useState(false);
-  const router = useRouter();
-
-  const [SearchBox,    setSearchBox]    = useState<React.ComponentType<any> | null>(null);
-  const [addressValue, setAddressValue] = useState("");
-  const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? "";
-
-  const {
-    register,
-    handleSubmit,
-    watch,
-    setValue,
-    formState: { errors, touchedFields },
-  } = useForm<ShippingData>({ mode: "onTouched" });
-
-  const watched    = watch();
-  const inputValid = (f: keyof ShippingData) => !!touchedFields[f] && !errors[f] && !!watched[f];
-
-  useEffect(() => {
-    if (!mapboxToken) {
-      console.error("[Mapbox] NEXT_PUBLIC_MAPBOX_TOKEN no está definido");
-      return;
-    }
-    import("@mapbox/search-js-react").then(mod => {
-      setSearchBox(() => mod.SearchBox as React.ComponentType<any>);
-    });
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const onMapboxRetrieve = (result: any) => {
-    const feature = result.features?.[0];
-    if (!feature) return;
-    const props    = feature.properties;
-    const ctx      = props?.context;
-    const addrLine = props?.address_line1 ?? props?.name ?? "";
-    if (addrLine) {
-      setAddressValue(addrLine);
-      setValue("address", addrLine, { shouldValidate: true, shouldTouch: true });
-    }
-    if (ctx?.postcode?.name) setValue("postcode", ctx.postcode.name, { shouldValidate: true });
-    if (ctx?.place?.name)    setValue("city",     ctx.place.name,    { shouldValidate: true });
-    if (ctx?.region?.name)   setValue("province", ctx.region.name,   { shouldValidate: true });
-  };
-
-  const onSubmit = async (data: ShippingData) => {
-    if (data._hp) return;
-
-    setSubmitting(true);
-    onError("");
-
-    try {
-      const result = await createOrderAction({
-        customerData: {
-          fullName:   data.fullName,
-          phone:      data.phone.replace(/[\s\-]/g, ""),
-          address:    data.address,
-          postalCode: data.postcode,
-          city:       data.city,
-          province:   data.province,
-          email:      data.email,
-        },
-        bundleId:           bundle.id,
-        bundlePriceInCents: bundle.priceInCents,
-        paymentMethod:      "COD",
-      });
-
-      if (!result.success) {
-        console.error("[CodForm] createOrderAction failed:", result.error);
-        onError(result.error ?? "Error al crear el pedido.");
-        return;
-      }
-
-      const names = data.fullName.split(" ");
-
-      try {
-        sessionStorage.setItem("healzyp_order", JSON.stringify({
-          orderNumber:     result.orderNumber,
-          email:           data.email,
-          firstName:       names[0],
-          paymentMethod:   "cod",
-          items: [{
-            name:       bundle.name,
-            srcUrl:     "/images/FOTOPRODUCT1.png",
-            quantity:   1,
-            attributes: [],
-            price:      bundle.priceInCents / 100,
-            discount:   0,
-          }],
-          shippingAddress: {
-            firstName:  names[0],
-            lastName:   names.slice(1).join(" "),
-            address:    data.address,
-            apartment:  "",
-            postalCode: data.postcode,
-            city:       data.city,
-            province:   data.province,
-            country:    "España",
-          },
-          shippingMethod:   { name: "Envío estándar", estimatedDays: "3-5 días hábiles", price: 0 },
-          subtotalEur:      bundle.priceInCents / 100,
-          shippingCostEur:  0,
-          couponDiscountEur: 0,
-          totalEur:         bundle.priceInCents / 100,
-        }));
-      } catch {}
-
-      router.push("/order/confirmation");
-    } catch (e) {
-      console.error("[CodForm] unexpected error:", e);
-      onError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  return (
-    <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-5">
-      {/* Honeypot */}
-      <input
-        type="text"
-        tabIndex={-1}
-        aria-hidden="true"
-        className="absolute opacity-0 h-0 w-0"
-        {...register("_hp")}
-      />
-
-      <div className="space-y-4">
-        <div className="flex items-center gap-2 pb-1 border-b border-gray-200">
-          <Package className="w-4 h-4 text-gray-500" />
-          <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wide">
-            Datos de envío
-          </h3>
-        </div>
-
-        <FormInput
-          label="Nombre completo"
-          placeholder="María García López"
-          error={errors.fullName?.message}
-          success={inputValid("fullName")}
-          register={register("fullName", {
-            required:  "Obligatorio",
-            minLength: { value: 2, message: "Mínimo 2 caracteres" },
-          })}
-          name="fullName"
-          autoComplete="name"
-        />
-
-        <FormInput
-          label="Email"
-          placeholder="maria@email.com"
-          type="email"
-          error={errors.email?.message}
-          success={inputValid("email")}
-          register={register("email", {
-            required: "Obligatorio",
-            pattern:  { value: EMAIL_RE, message: "Email no válido" },
-          })}
-          name="email"
-          autoComplete="email"
-        />
-
-        <FormInput
-          label="Teléfono"
-          placeholder="612 345 678"
-          type="tel"
-          error={errors.phone?.message}
-          success={inputValid("phone")}
-          register={register("phone", {
-            required: "Obligatorio",
-            pattern:  { value: PHONE_RE, message: "Teléfono no válido" },
-          })}
-          name="phone"
-          autoComplete="tel"
-        />
-
-        {/* Dirección con Mapbox SearchBox */}
-        <div className="space-y-1.5">
-          <label className="text-sm font-semibold text-gray-800 block">Dirección</label>
-          <div className="relative">
-            {SearchBox && mapboxToken ? (
-              <>
-                <input
-                  type="text"
-                  style={{ display: "none" }}
-                  {...register("address", {
-                    required:  "Obligatorio",
-                    minLength: { value: 5, message: "Demasiado corta" },
-                  })}
-                  readOnly
-                />
-                <SearchBox
-                  accessToken={mapboxToken}
-                  value={addressValue}
-                  onChange={(v: string) => {
-                    setAddressValue(v);
-                    setValue("address", v, { shouldValidate: true, shouldTouch: true });
-                  }}
-                  onRetrieve={onMapboxRetrieve}
-                  options={{ country: "es", language: "es" }}
-                  popoverOptions={{ renderIntoPortal: true }}
-                  placeholder="Calle Mayor 123, 2ºB"
-                  theme={{ cssText: MAPBOX_THEME_CSS }}
-                />
-              </>
-            ) : (
-              <input
-                type="text"
-                autoComplete="street-address"
-                placeholder="Calle Mayor 123, 2ºB"
-                className={addrInputCls(errors.address?.message, inputValid("address"))}
-                value={addressValue}
-                onChange={e => {
-                  setAddressValue(e.target.value);
-                  setValue("address", e.target.value, { shouldValidate: true, shouldTouch: true });
-                }}
-              />
-            )}
-            {inputValid("address") && !errors.address && (
-              <CheckCircle2 className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-emerald-500" />
-            )}
-          </div>
-          {errors.address && (
-            <p className="text-xs text-red-500 font-medium">{errors.address.message}</p>
-          )}
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          <FormInput
-            label="Código Postal"
-            placeholder="28001"
-            error={errors.postcode?.message}
-            success={inputValid("postcode")}
-            register={register("postcode", {
-              required: "Obligatorio",
-              pattern:  { value: POSTCODE_RE, message: "5 dígitos" },
-            })}
-            name="postcode"
-            autoComplete="postal-code"
-          />
-          <FormInput
-            label="Ciudad"
-            placeholder="Madrid"
-            error={errors.city?.message}
-            success={inputValid("city")}
-            register={register("city", { required: "Obligatorio" })}
-            name="city"
-            autoComplete="address-level2"
-          />
-        </div>
-
-        <FormInput
-          label="Provincia"
-          placeholder="Madrid"
-          error={errors.province?.message}
-          success={inputValid("province")}
-          register={register("province", { required: "Obligatorio" })}
-          name="province"
-          autoComplete="address-level1"
-        />
-      </div>
-
-      {/* Info contra reembolso */}
-      <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 space-y-2">
-        <div className="flex items-center gap-2">
-          <Wallet className="w-4 h-4 text-amber-600" />
-          <span className="text-sm font-bold text-amber-800">Pago contra reembolso</span>
-        </div>
-        <p className="text-xs text-amber-700 leading-relaxed">
-          Pagas el importe total al recibir el paquete. El repartidor acepta
-          efectivo o tarjeta. Recibirás un SMS con la fecha y franja horaria de entrega.
-        </p>
-      </div>
-
-      <button
-        type="submit"
-        disabled={submitting}
-        className={cn(
-          "w-full h-12 rounded-full font-bold text-base transition-all",
-          "flex items-center justify-center gap-2",
-          "bg-[#487D26] text-white shadow-[0_4px_14px_rgba(72,125,38,0.35)]",
-          "hover:bg-[#3a6420] disabled:opacity-60 disabled:cursor-not-allowed"
-        )}
-      >
-        {submitting ? (
-          <>
-            <Loader2 className="w-5 h-5 animate-spin" />
-            Procesando...
-          </>
-        ) : (
-          <>
-            <Truck className="w-5 h-5" />
-            Confirmar pedido
-          </>
-        )}
-      </button>
-    </form>
-  );
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════ */
 /*  MAIN MODAL                                                                  */
 /* ═══════════════════════════════════════════════════════════════════════════ */
 
-const CheckoutModal: React.FC<CheckoutModalProps> = ({ open, onOpenChange, method }) => {
+const CheckoutModal: React.FC<CheckoutModalProps> = ({ open, onOpenChange }) => {
   const [bundle,              setBundle]              = useState<Bundle | null>(null);
   const [clientSecret,        setClientSecret]        = useState<string | null>(null);
   const [clientSecretLoading, setClientSecretLoading] = useState(false);
@@ -978,7 +657,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ open, onOpenChange, metho
     setBundle(b);
     setError(null);
 
-    if (method === "card" && b) {
+    if (b) {
       const cached = clientSecretCache.current[b.id];
       if (cached) {
         setClientSecret(cached);
@@ -1002,7 +681,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ open, onOpenChange, metho
         })
         .finally(() => setClientSecretLoading(false));
     }
-  }, [open, method]);
+  }, [open]);
 
   const handleError = useCallback((msg: string) => setError(msg || null), []);
 
@@ -1013,8 +692,6 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ open, onOpenChange, metho
       setClientSecret(null);
     }, 300);
   }, [onOpenChange]);
-
-  const isCard = method === "card";
 
   if (!bundle) return null;
 
@@ -1030,7 +707,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ open, onOpenChange, metho
         )}
       >
         <DialogTitle className="sr-only">
-          {isCard ? "Pago con tarjeta" : "Pago contra reembolso"}
+          Pago con tarjeta
         </DialogTitle>
         <DialogDescription className="sr-only">
           Completa tu compra de forma segura
@@ -1040,10 +717,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ open, onOpenChange, metho
         <div className="shrink-0 flex items-center justify-between px-5 py-4 border-b border-gray-100 bg-white">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-full bg-[#487D26]/10 flex items-center justify-center">
-              {isCard
-                ? <CreditCard className="w-4 h-4 text-[#487D26]" />
-                : <Wallet    className="w-4 h-4 text-[#487D26]" />
-              }
+              <CreditCard className="w-4 h-4 text-[#487D26]" />
             </div>
             <span className={cn(integralCF.className, "text-sm text-black")}>
               Checkout seguro
@@ -1062,7 +736,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ open, onOpenChange, metho
         <div className="overflow-y-auto flex-1">
           <div className="p-5 space-y-5">
             {/* Resumen colapsable en móvil, siempre visible en desktop */}
-            <OrderSummaryPanel bundle={bundle} isCard={isCard} />
+            <OrderSummaryPanel bundle={bundle} />
 
             {/* Error banner */}
             <AnimatePresence>
@@ -1080,30 +754,26 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ open, onOpenChange, metho
             </AnimatePresence>
 
             {/* Formulario */}
-            <div key={method}>
-              {isCard ? (
-                clientSecretLoading ? (
-                  <SkeletonForm />
-                ) : clientSecret ? (
-                  <Elements
-                    stripe={stripePromise}
-                    options={{
-                      clientSecret,
-                      appearance: STRIPE_APPEARANCE,
-                      locale:     "es",
-                    }}
-                  >
-                    <CardForm bundle={bundle} onError={handleError} />
-                  </Elements>
-                ) : (
-                  <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3">
-                    <p className="text-sm text-red-700">
-                      No se pudo cargar el sistema de pago. Cierra el modal e inténtalo de nuevo.
-                    </p>
-                  </div>
-                )
+            <div>
+              {clientSecretLoading ? (
+                <SkeletonForm />
+              ) : clientSecret ? (
+                <Elements
+                  stripe={stripePromise}
+                  options={{
+                    clientSecret,
+                    appearance: STRIPE_APPEARANCE,
+                    locale:     "es",
+                  }}
+                >
+                  <CardForm bundle={bundle} onError={handleError} />
+                </Elements>
               ) : (
-                <CodForm bundle={bundle} onError={handleError} />
+                <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3">
+                  <p className="text-sm text-red-700">
+                    No se pudo cargar el sistema de pago. Cierra el modal e inténtalo de nuevo.
+                  </p>
+                </div>
               )}
             </div>
 

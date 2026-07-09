@@ -13,7 +13,7 @@ export interface OrderNotificationData {
   province?: string
   bundleName?: string
   totalEuros: number
-  paymentMethod?: 'COD' | 'CARD'
+  paymentMethod?: 'CARD'
   status: 'new' | 'confirmed' | 'failed'
   failureReason?: string
   paymentIntentId?: string
@@ -43,7 +43,7 @@ export async function sendOrderNotification(data: OrderNotificationData): Promis
     data.province && `Provincia: ${data.province}`,
     data.bundleName && `Producto: ${data.bundleName}`,
     `Total: ${data.totalEuros.toFixed(2)} €`,
-    data.paymentMethod && `Método: ${data.paymentMethod === 'COD' ? 'Contra reembolso' : 'Tarjeta'}`,
+    data.paymentMethod && `Método: Tarjeta`,
     data.paymentIntentId && `Stripe PI: ${data.paymentIntentId}`,
     data.failureReason && `Motivo: ${data.failureReason}`,
   ].filter(Boolean) as string[]

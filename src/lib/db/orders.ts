@@ -5,7 +5,6 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { createServiceClient, supabase } from '@/lib/supabase'
-import { sendPushover } from '@/lib/notifications/pushover'
 import { BUNDLES } from '@/lib/bundles'
 import type {
   OrderRow,
@@ -223,24 +222,14 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
   try {
     await db.from('order_tracking').insert({
       order_id: orderId,
-      estado: input.paymentMethod === 'COD' ? 'pendiente' : 'pagado',
-      descripcion: input.paymentMethod === 'COD'
-        ? 'Pedido recibido — pendiente de pago en entrega'
-        : 'Pago confirmado correctamente',
+      estado: 'pagado',
+      descripcion: 'Pago confirmado correctamente',
     })
   } catch (err) {
     console.warn('[createOrder] Error al insertar order_tracking:', err)
   }
 
-  // ── 7. Notificación Pushover (solo COD; CARD se notifica desde el webhook) ─
-  if (input.paymentMethod === 'COD') {
-    sendPushover({
-      title: '📦 Nuevo pedido COD',
-      message: `👤 ${input.customerData.fullName}\n📞 ${input.customerData.phone}\n💰 ${Number(unitPriceEur).toFixed(2)}€ · COD\n📍 ${input.customerData.address}, ${input.customerData.city}`,
-      priority: 1,
-      sound: 'cashregister',
-    }).catch((e) => console.error('[createOrder] Pushover COD error:', e))
-  }
+  // Notificación Pushover: se envía desde el webhook de Stripe al confirmar el pago.
 
   return { success: true, orderNumber: orderNumber as string, orderId }
   } catch (e) {

@@ -90,16 +90,12 @@ export default function TermsPage() {
           title: "Métodos de Pago",
           content: (
             <>
-              <p>Aceptamos los siguientes métodos de pago:</p>
+              <p>Aceptamos pago con tarjeta:</p>
               <ul className="mt-2 space-y-1.5 list-disc list-inside">
                 <li>
                   <strong>Pago con tarjeta</strong> (Visa, Mastercard, AMEX) —
                   procesado de forma segura por Stripe, conforme a PCI DSS
                   Nivel 1.
-                </li>
-                <li>
-                  <strong>Contra reembolso (COD)</strong> — pago en efectivo al
-                  repartidor en el momento de la entrega.
                 </li>
               </ul>
               <p className="mt-3">

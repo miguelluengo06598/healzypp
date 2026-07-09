@@ -165,7 +165,7 @@ export function useMetaPixel() {
 
   /**
    * Dispara Purchase SOLO en el pixel de navegador (fbq).
-   * El CAPI lo envía el servidor (webhook Stripe o server action COD) con el
+   * El CAPI lo envía el servidor (webhook de Stripe) con el
    * mismo event_id determinístico → Meta deduplica automáticamente browser+CAPI.
    * No llamar a sendCAPI aquí evita el triple envío que generaba doble conteo.
    */
