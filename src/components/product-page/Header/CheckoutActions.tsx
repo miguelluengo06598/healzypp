@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { Wallet, CreditCard } from "lucide-react";
+import { CreditCard } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Product } from "@/types/product.types";
 import { getStoredBundle, type Bundle } from "@/components/checkout/OrderSummary";
@@ -16,7 +16,6 @@ interface CheckoutActionsProps {
 const CheckoutActions: React.FC<CheckoutActionsProps> = ({ data }) => {
   const [bundle, setBundle] = useState<Bundle | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
-  const [activeMethod, setActiveMethod] = useState<"cod" | "card">("cod");
   const { trackAddToCart, trackInitiateCheckout } = useMetaPixel();
 
   useEffect(() => {
@@ -32,10 +31,9 @@ const CheckoutActions: React.FC<CheckoutActionsProps> = ({ data }) => {
     return () => clearInterval(interval);
   }, []);
 
-  const openModal = (method: "cod" | "card") => {
+  const openModal = () => {
     const b = getStoredBundle();
     setBundle(b);
-    setActiveMethod(method);
     setModalOpen(true);
     trackAddToCart({ id: data.id, name: data.title, price: b.priceInCents / 100 });
     trackInitiateCheckout({
@@ -56,31 +54,17 @@ const CheckoutActions: React.FC<CheckoutActionsProps> = ({ data }) => {
 
   return (
     <>
-      {/* Desktop: inline buttons */}
+      {/* Desktop */}
       <div className="hidden md:flex flex-col gap-3">
         <motion.button
           type="button"
           whileTap={{ scale: 0.97 }}
           transition={{ type: "spring", stiffness: 500, damping: 30 }}
-          onClick={() => openModal("cod")}
+          onClick={openModal}
           className="w-full rounded-full h-[52px] text-base font-bold bg-brand hover:bg-brand-hover text-white transition-all shadow-[0_4px_14px_rgba(72,125,38,0.3)] flex items-center justify-center gap-2"
         >
-          <Wallet className="w-4 h-4" />
-          Pagar Al Recibir
-        </motion.button>
-
-        <motion.button
-          type="button"
-          whileTap={{ scale: 0.97 }}
-          transition={{ type: "spring", stiffness: 500, damping: 30 }}
-          onClick={() => openModal("card")}
-          className="w-full rounded-full h-[52px] text-base font-medium border-2 border-[#487D26] bg-white text-[#487D26] hover:bg-[#F0F4EC] transition-all flex items-center justify-center gap-2"
-        >
           <CreditCard className="w-4 h-4" />
-          <span>Pagar con Tarjeta</span>
-          <span className="bg-[#487D26] text-white text-[11px] font-bold px-2 py-0.5 rounded-full leading-tight">
-            5€ dto.
-          </span>
+          Pagar con Tarjeta
         </motion.button>
       </div>
 
@@ -90,25 +74,11 @@ const CheckoutActions: React.FC<CheckoutActionsProps> = ({ data }) => {
           type="button"
           whileTap={{ scale: 0.97 }}
           transition={{ type: "spring", stiffness: 500, damping: 30 }}
-          onClick={() => openModal("cod")}
+          onClick={openModal}
           className="w-full rounded-full h-11 text-sm font-bold bg-brand hover:bg-brand-hover text-white transition-all shadow-[0_4px_14px_rgba(72,125,38,0.3)] flex items-center justify-center gap-2"
         >
-          <Wallet className="w-4 h-4" />
-          Pagar Al Recibir
-        </motion.button>
-
-        <motion.button
-          type="button"
-          whileTap={{ scale: 0.97 }}
-          transition={{ type: "spring", stiffness: 500, damping: 30 }}
-          onClick={() => openModal("card")}
-          className="w-full rounded-full h-11 text-sm font-medium border-2 border-[#487D26] bg-white text-[#487D26] hover:bg-[#F0F4EC] transition-all flex items-center justify-center gap-2"
-        >
           <CreditCard className="w-4 h-4" />
-          <span>Pagar con Tarjeta</span>
-          <span className="bg-[#487D26] text-white text-[10px] font-bold px-2 py-0.5 rounded-full leading-tight">
-            5€ dto.
-          </span>
+          Pagar con Tarjeta
         </motion.button>
       </div>
 
@@ -116,7 +86,6 @@ const CheckoutActions: React.FC<CheckoutActionsProps> = ({ data }) => {
       <CheckoutModal
         open={modalOpen}
         onOpenChange={setModalOpen}
-        method={activeMethod}
       />
     </>
   );

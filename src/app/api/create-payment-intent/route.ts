@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { z } from "zod";
-import { BUNDLES, CARD_DISCOUNT_CENTS } from "@/lib/bundles";
+import { BUNDLES } from "@/lib/bundles";
 import { paymentIntentRatelimit, getClientIp } from "@/lib/rate-limit";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
@@ -66,10 +66,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Bundle no válido." }, { status: 400 });
     }
 
-    const amountCents = Math.max(0, bundle.priceInCents - CARD_DISCOUNT_CENTS);
-
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: amountCents,
+      amount: bundle.priceInCents,
       currency: "eur",
       capture_method: "automatic",
       metadata: { bundleId: String(bundleId), bundleName: bundle.name },

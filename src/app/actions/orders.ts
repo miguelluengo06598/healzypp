@@ -4,10 +4,7 @@ import { z } from 'zod'
 import { createOrder } from '@/lib/db/orders'
 import type { CreateOrderResult } from '@/lib/db/orders'
 import { orderIpRatelimit, orderPhoneRatelimit, getClientIpFromHeaders } from '@/lib/rate-limit'
-import { sendPushover } from '@/lib/notifications/pushover'
-import { BUNDLES } from '@/lib/bundles'
 import { getCurrentUserId } from '@/lib/supabase-server'
-import { sendPurchaseCAPI } from '@/lib/meta/capi'
 
 const SPANISH_PHONE = /^(\+34|0034|34)?[6789]\d{8}$/
 const POSTCODE_ES   = /^\d{5}$/
@@ -26,7 +23,7 @@ const CreateOrderSchema = z.object({
   }),
   bundleId:               z.number().int().min(1).max(3),
   bundlePriceInCents:     z.number().int().min(0).optional(),
-  paymentMethod:          z.enum(['CARD', 'COD']),
+  paymentMethod:          z.literal('CARD'),
   stripePaymentIntentId:  z.string().startsWith('pi_').optional(),
   customerNotes:          z.string().max(500).optional(),
 })
@@ -47,7 +44,7 @@ export async function createOrderAction(
     return { success: false, error: first?.message ?? 'Datos de pedido inválidos.' }
   }
 
-  // Rate limit por teléfono: 3 pedidos/hora (mitiga spam de COD)
+  // Rate limit por teléfono: 3 pedidos/hora (mitiga spam de pedidos)
   const phone = parsed.data.customerData.phone
   const { success: phoneAllowed } = await orderPhoneRatelimit.limit(phone)
   if (!phoneAllowed) {
@@ -55,39 +52,5 @@ export async function createOrderAction(
   }
 
   const userId = (await getCurrentUserId()) ?? undefined
-  const result = await createOrder({ ...parsed.data, userId })
-
-  // Notificaciones y CAPI para pedidos COD (fire-and-forget)
-  if (result.success && parsed.data.paymentMethod === 'COD') {
-    const bundle = BUNDLES.find(b => b.id === parsed.data.bundleId)
-    const totalEur = bundle ? bundle.priceInCents / 100 : 0
-    const itemsText = `· ${bundle?.name ?? 'Producto'} x1`
-    const names = parsed.data.customerData.fullName.split(' ')
-
-    sendPushover({
-      title: '🛒 Nuevo pedido COD',
-      message: `👤 ${parsed.data.customerData.fullName}\n💰 ${totalEur.toFixed(2)}€ · Contra reembolso\n📦 ${itemsText}\n📍 ${parsed.data.customerData.city}`,
-      priority: 1,
-      sound: 'cashregister',
-      url: `https://healzyp.com/admin/orders/${result.orderId}`,
-      url_title: 'Ver pedido',
-    }).catch((e) => console.error('[createOrderAction] Pushover error:', e))
-
-    // Meta CAPI Purchase — event_id determinístico para deduplicar con el browser
-    if (result.orderNumber) {
-      sendPurchaseCAPI({
-        orderNumber: result.orderNumber,
-        email:       parsed.data.customerData.email ?? null,
-        phone:       parsed.data.customerData.phone,
-        firstName:   names[0],
-        lastName:    names.slice(1).join(' ') || null,
-        city:        parsed.data.customerData.city,
-        zip:         parsed.data.customerData.postalCode,
-        totalEur,
-        contentIds:  [String(parsed.data.bundleId)],
-      }).catch((e) => console.error('[createOrderAction] CAPI Purchase error:', e))
-    }
-  }
-
-  return result
+  return createOrder({ ...parsed.data, userId })
 }

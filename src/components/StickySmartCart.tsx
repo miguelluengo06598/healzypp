@@ -40,7 +40,6 @@ import {
   remove,
 } from "@/lib/features/carts/cartsSlice";
 import CheckoutModal from "@/components/checkout/CheckoutModal";
-import PaymentMethodSelector from "@/components/cart/PaymentMethodSelector";
 
 /* ------------------------------------------------------------------ */
 /*  TYPES                                                              */
@@ -49,7 +48,7 @@ import PaymentMethodSelector from "@/components/cart/PaymentMethodSelector";
 interface MiniCartDrawerProps {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  onOpenCheckout: (method: "card" | "cod") => void;
+  onOpenCheckout: () => void;
 }
 
 interface AnimatedCheckoutCTAProps {
@@ -325,11 +324,6 @@ const MiniCartDrawer: React.FC<MiniCartDrawerProps> = ({
   const items = cart?.items ?? [];
   const hasItems = items.length > 0;
   const discount = totalPrice - adjustedTotalPrice;
-  const [showSelector, setShowSelector] = useState(false);
-
-  React.useEffect(() => {
-    if (!open) setShowSelector(false);
-  }, [open]);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -395,42 +389,25 @@ const MiniCartDrawer: React.FC<MiniCartDrawerProps> = ({
                 </div>
               </div>
 
-              <AnimatePresence mode="wait">
-                {showSelector ? (
-                  <PaymentMethodSelector
-                    key="selector"
-                    onConfirm={(method) => {
-                      onOpenChange(false);
-                      onOpenCheckout(method);
-                    }}
-                    onCancel={() => setShowSelector(false)}
-                  />
-                ) : (
-                  <motion.div
-                    key="cta"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.15 }}
-                    className="space-y-2"
-                  >
-                    <AnimatedCheckoutCTA
-                      total={adjustedTotalPrice}
-                      onCheckout={() => setShowSelector(true)}
-                    />
-                    <Button
-                      variant="outline"
-                      className="w-full rounded-full h-11 text-xs border-black/10 hover:bg-black/5"
-                      onClick={() => {
-                        onOpenChange(false);
-                        router.push("/cart");
-                      }}
-                    >
-                      Ver carrito completo
-                    </Button>
-                  </motion.div>
-                )}
-              </AnimatePresence>
+              <div className="space-y-2">
+                <AnimatedCheckoutCTA
+                  total={adjustedTotalPrice}
+                  onCheckout={() => {
+                    onOpenChange(false);
+                    onOpenCheckout();
+                  }}
+                />
+                <Button
+                  variant="outline"
+                  className="w-full rounded-full h-11 text-xs border-black/10 hover:bg-black/5"
+                  onClick={() => {
+                    onOpenChange(false);
+                    router.push("/cart");
+                  }}
+                >
+                  Ver carrito completo
+                </Button>
+              </div>
             </div>
           </>
         )}
@@ -447,27 +424,20 @@ const StickySmartCart: React.FC = () => {
   const { drawerOpen, setDrawerOpen, hasItems } = useSmartCart();
 
   const [checkoutOpen, setCheckoutOpen] = useState(false);
-  const [checkoutMethod, setCheckoutMethod] = useState<"card" | "cod">("cod");
 
   if (!hasItems) return null;
-
-  const handleOpenCheckout = (method: "card" | "cod") => {
-    setCheckoutMethod(method);
-    setCheckoutOpen(true);
-  };
 
   return (
     <>
       <MiniCartDrawer
         open={drawerOpen}
         onOpenChange={setDrawerOpen}
-        onOpenCheckout={handleOpenCheckout}
+        onOpenCheckout={() => setCheckoutOpen(true)}
       />
 
       <CheckoutModal
         open={checkoutOpen}
         onOpenChange={setCheckoutOpen}
-        method={checkoutMethod}
       />
     </>
   );

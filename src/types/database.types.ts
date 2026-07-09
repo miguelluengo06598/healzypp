@@ -3,7 +3,7 @@
 // Actualizado manualmente para coincidir con supabase/schema.sql
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type PaymentMethod = 'COD' | 'CARD'
+export type PaymentMethod = 'CARD'
 export type PaymentStatus = 'PENDING' | 'PAID' | 'FAILED' | 'REFUNDED'
 export type OrderStatus =
   | 'PENDING'

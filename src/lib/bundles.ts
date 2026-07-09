@@ -1,8 +1,6 @@
 // Datos de bundles compartidos entre servidor y cliente.
 // Sin "use client" ni "use server" para que sea importable desde ambos contextos.
 
-export const CARD_DISCOUNT_CENTS = 500; // €5.00
-
 export type Bundle = {
   id: number;
   name: string;
