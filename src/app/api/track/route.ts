@@ -46,6 +46,10 @@ const BaseEventSchema = z.object({
   url: z.string(),
 })
 
+// TEMPORAL: acepta number (mock legacy) y UUID (real) durante la migración
+// de Fase B→D. Cerrar a solo string().uuid() cuando Fase D esté completa.
+const ProductIdSchema = z.union([z.number().int().positive(), z.string().uuid()])
+
 const PageViewEventSchema = BaseEventSchema.extend({
   eventType: z.literal('page_view'),
   path: z.string(),
@@ -55,14 +59,14 @@ const PageViewEventSchema = BaseEventSchema.extend({
 
 const ProductViewEventSchema = BaseEventSchema.extend({
   eventType: z.literal('product_view'),
-  productId: z.number().int().positive(),
+  productId: ProductIdSchema,
   productSlug: z.string(),
   durationSeconds: z.number().optional(),
 })
 
 const CartActionEventSchema = BaseEventSchema.extend({
   eventType: z.literal('cart_action'),
-  productId: z.number().int().positive(),
+  productId: ProductIdSchema,
   bundleId: z.number().int().positive().nullable().optional(),
   action: z.enum(['add', 'remove', 'update']),
   quantity: z.number().int().min(0),
@@ -104,27 +108,27 @@ const SessionStartEventSchema = BaseEventSchema.extend({
 
 const ProductPageEnterEventSchema = BaseEventSchema.extend({
   eventType: z.literal('product_page_enter'),
-  productId: z.number().int().positive(),
+  productId: ProductIdSchema,
   productSlug: z.string(),
 })
 
 const ProductSectionViewEventSchema = BaseEventSchema.extend({
   eventType: z.literal('product_section_view'),
-  productId: z.number().int().positive(),
+  productId: ProductIdSchema,
   productSlug: z.string(),
   section: z.string(),
 })
 
 const ProductScrollDepthEventSchema = BaseEventSchema.extend({
   eventType: z.literal('product_scroll_depth'),
-  productId: z.number().int().positive(),
+  productId: ProductIdSchema,
   productSlug: z.string(),
   depthPercent: z.number(),
 })
 
 const ProductInteractionEventSchema = BaseEventSchema.extend({
   eventType: z.literal('product_interaction'),
-  productId: z.number().int().positive(),
+  productId: ProductIdSchema,
   productSlug: z.string(),
   action: z.enum(['add_to_cart', 'buy_now', 'bundle_select', 'scroll']),
   extra: z.record(z.string(), z.unknown()).optional(),
@@ -132,7 +136,7 @@ const ProductInteractionEventSchema = BaseEventSchema.extend({
 
 const ProductPageExitEventSchema = BaseEventSchema.extend({
   eventType: z.literal('product_page_exit'),
-  productId: z.number().int().positive(),
+  productId: ProductIdSchema,
   productSlug: z.string(),
   totalSeconds: z.number(),
   lastSection: z.string(),

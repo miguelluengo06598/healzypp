@@ -11,7 +11,7 @@ import { useCookieConsent } from '@/hooks/useCookieConsent'
 import { generateEventId, getPurchaseEventId } from '@/lib/meta/pixel'
 
 interface ProductData {
-  id: number
+  id: number | string
   slug?: string
   name: string
   price: number
@@ -21,7 +21,7 @@ interface ProductData {
 interface CartData {
   value: number
   currency: string
-  items: { id: number; name: string; quantity: number; price: number }[]
+  items: { id: number | string; name: string; quantity: number; price: number }[]
 }
 
 interface OrderData {
@@ -29,7 +29,7 @@ interface OrderData {
   orderNumber: string
   value: number
   currency: string
-  items: { id: number; name: string; quantity: number; price: number }[]
+  items: { id: number | string; name: string; quantity: number; price: number }[]
   email?: string
   phone?: string
   firstName?: string

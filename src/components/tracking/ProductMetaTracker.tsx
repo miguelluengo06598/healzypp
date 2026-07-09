@@ -9,7 +9,7 @@ import { useEffect } from 'react'
 import { useMetaPixel } from '@/hooks/useMetaPixel'
 
 interface Props {
-  productId: number
+  productId: string
   productSlug: string
   productName: string
   price: number
