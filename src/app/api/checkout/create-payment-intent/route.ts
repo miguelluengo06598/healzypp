@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import Stripe from "stripe"
 import { z } from "zod"
-import { newArrivalsData, topSellingData } from "@/data/products"
 import { SHIPPING_OPTIONS, FREE_SHIPPING_THRESHOLD_EUR } from "@/lib/shipping"
 import { createCheckoutOrder, attachPaymentIntent } from "@/lib/db/checkout-orders"
 import { paymentIntentRatelimit, getClientIp } from "@/lib/rate-limit"
@@ -12,11 +11,6 @@ import type { ShippingAddress, ShippingMethod } from "@/hooks/useCheckout"
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2026-04-22.dahlia",
 })
-
-// Deduplicated static product catalog for server-side price verification
-const PRODUCT_CATALOG = [...newArrivalsData, ...topSellingData].filter(
-  (p, i, arr) => arr.findIndex((x) => x.id === p.id) === i
-)
 
 const ShippingAddressSchema = z.object({
   firstName: z.string().min(1).max(100).trim(),
@@ -37,7 +31,7 @@ const BodySchema = z.object({
   items: z
     .array(
       z.object({
-        id: z.number().int().positive(),
+        id: z.string().uuid(),
         quantity: z.number().int().min(1).max(100),
         attributes: z.array(z.string()).default([]),
       })
@@ -51,29 +45,87 @@ const BodySchema = z.object({
   couponDiscountEur: z.number().min(0).max(10000).default(0),
 })
 
-/** Server-verified adjusted price for a product */
-function getVerifiedItemPrice(
-  productId: number,
+/**
+ * Precio verificado en servidor para un item del carrito, leído de Supabase
+ * (products/bundles reales) — nunca del precio que envía el cliente.
+ *
+ * - Sin bundle (attributes vacío): precio_individual × quantity.
+ * - Con bundle (attributes[0] = "N Bote(s)"): se extrae la cantidad (N) del
+ *   texto y se busca el bundle real por product_id + cantidad — cantidad es
+ *   un dato numérico estable, más robusto que comparar bundles.nombre como
+ *   string exacto (el texto podría reformularse sin que este endpoint se entere).
+ * - Si no hay match real para el bundle solicitado, se devuelve un error
+ *   explícito: nunca se cae a un precio inventado o desincronizado.
+ */
+async function getVerifiedItemPrice(
+  db: ReturnType<typeof createServiceClient>,
+  productId: string,
+  attributes: string[],
   quantity: number
-): { unitPriceEur: number; discountEur: number; totalEur: number; title: string } | null {
-  const product = PRODUCT_CATALOG.find((p) => p.id === productId)
-  if (!product) return null
+): Promise<
+  | { ok: true; unitPriceEur: number; discountEur: number; totalEur: number; title: string }
+  | { ok: false; error: string }
+> {
+  const { data: product, error: productError } = await db
+    .from("products")
+    .select("id, nombre, precio, activo")
+    .eq("id", productId)
+    .eq("activo", true)
+    .maybeSingle()
 
-  const basePrice = product.price
-  let adjustedPrice = basePrice
-
-  if (product.discount.percentage > 0) {
-    adjustedPrice = Math.round(basePrice * (1 - product.discount.percentage / 100))
-  } else if (product.discount.amount > 0) {
-    adjustedPrice = Math.round(basePrice - product.discount.amount)
+  if (productError || !product) {
+    return { ok: false, error: `Producto ${productId} no encontrado.` }
   }
 
-  const discountEur = basePrice - adjustedPrice
+  // Sin bundle: precio individual real, sin descuento adicional
+  // (products.precio ya es el precio de venta final).
+  if (attributes.length === 0) {
+    const unitPriceEur = Number(product.precio)
+    return {
+      ok: true,
+      unitPriceEur,
+      discountEur: 0,
+      totalEur: unitPriceEur * quantity,
+      title: product.nombre,
+    }
+  }
+
+  // Con bundle: extraer la cantidad del texto ("2 Botes" → 2) y buscar el
+  // bundle real por product_id + cantidad.
+  const qtyMatch = attributes[0]?.match(/^(\d+)/)
+  const requestedQty = qtyMatch ? Number(qtyMatch[1]) : null
+
+  if (requestedQty == null) {
+    return {
+      ok: false,
+      error: `Bundle "${attributes[0]}" no reconocido para el producto ${productId}.`,
+    }
+  }
+
+  const { data: bundle, error: bundleError } = await db
+    .from("bundles")
+    .select("id, cantidad, precio, ahorro")
+    .eq("product_id", productId)
+    .eq("cantidad", requestedQty)
+    .eq("activo", true)
+    .maybeSingle()
+
+  if (bundleError || !bundle) {
+    return {
+      ok: false,
+      error: `Bundle "${attributes[0]}" no existe para el producto ${productId}.`,
+    }
+  }
+
+  const unitPriceEur = Number(bundle.precio)
+  const discountEur = bundle.ahorro != null ? Number(bundle.ahorro) : 0
+
   return {
-    unitPriceEur: adjustedPrice,
+    ok: true,
+    unitPriceEur,
     discountEur,
-    totalEur: adjustedPrice * quantity,
-    title: product.title,
+    totalEur: unitPriceEur * quantity,
+    title: product.nombre,
   }
 }
 
@@ -108,9 +160,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Método de envío no válido." }, { status: 400 })
   }
 
-  // Server-verify all product prices
+  // Server-verify all product/bundle prices contra Supabase real
+  const db = createServiceClient()
+
   const verifiedItems: Array<{
-    productId: number
+    productId: string
     productTitle: string
     quantity: number
     unitPriceEur: number
@@ -120,12 +174,9 @@ export async function POST(req: NextRequest) {
   let subtotalEur = 0
 
   for (const item of items) {
-    const verified = getVerifiedItemPrice(item.id, item.quantity)
-    if (!verified) {
-      return NextResponse.json(
-        { error: `Producto ${item.id} no encontrado.` },
-        { status: 400 }
-      )
+    const verified = await getVerifiedItemPrice(db, item.id, item.attributes, item.quantity)
+    if (!verified.ok) {
+      return NextResponse.json({ error: verified.error }, { status: 400 })
     }
     verifiedItems.push({
       productId: item.id,
@@ -147,7 +198,6 @@ export async function POST(req: NextRequest) {
   let safeCouponDiscount = 0
   if (couponCode) {
     try {
-      const db = createServiceClient()
       const { data: couponData } = await (db as any)
         .from('coupons')
         .select('*')

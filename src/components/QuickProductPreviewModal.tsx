@@ -173,13 +173,13 @@ const ModalImageGallery: React.FC<{ product: Product }> = ({ product }) => {
 /*  WISHLIST HOOK (local)                                              */
 /* ------------------------------------------------------------------ */
 
-const useWishlistState = (productId: number) => {
+const useWishlistState = (productId: number | string) => {
   const [isWishlisted, setIsWishlisted] = useState(false);
 
   useEffect(() => {
     try {
       const raw = localStorage.getItem("healzyp-wishlist");
-      const list = raw ? (JSON.parse(raw) as number[]) : [];
+      const list = raw ? (JSON.parse(raw) as (number | string)[]) : [];
       setIsWishlisted(list.includes(productId));
     } catch {
       setIsWishlisted(false);
@@ -191,7 +191,7 @@ const useWishlistState = (productId: number) => {
       const next = !prev;
       try {
         const raw = localStorage.getItem("healzyp-wishlist");
-        const list = raw ? (JSON.parse(raw) as number[]) : [];
+        const list = raw ? (JSON.parse(raw) as (number | string)[]) : [];
         const updated = next
           ? [...list, productId]
           : list.filter((id) => id !== productId);
@@ -336,17 +336,21 @@ const QuickProductPreviewModal: React.FC = () => {
 
             {/* Rating */}
             <div className="flex items-center gap-2 mb-4">
-              <Rating
-                initialValue={product.rating}
-                allowFraction
-                SVGclassName="inline-block"
-                emptyClassName="fill-gray-50"
-                size={20}
-                readonly
-              />
-              <span className="text-sm font-medium text-black">
-                {product.rating.toFixed(1)}
-              </span>
+              {product.rating != null && (
+                <>
+                  <Rating
+                    initialValue={product.rating}
+                    allowFraction
+                    SVGclassName="inline-block"
+                    emptyClassName="fill-gray-50"
+                    size={20}
+                    readonly
+                  />
+                  <span className="text-sm font-medium text-black">
+                    {product.rating.toFixed(1)}
+                  </span>
+                </>
+              )}
               {product.reviewsCount != null && (
                 <span className="text-xs text-black/40">
                   ({product.reviewsCount} reseñas)

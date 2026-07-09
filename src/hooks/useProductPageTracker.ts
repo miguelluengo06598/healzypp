@@ -20,7 +20,7 @@ import type {
 } from '@/types/tracking.types'
 
 interface UseProductPageTrackerOptions {
-  productId: number
+  productId: string
   productSlug: string
 }
 

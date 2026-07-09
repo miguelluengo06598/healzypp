@@ -7,10 +7,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { newArrivalsData } from "@/data/products";
+import { getActiveProducts } from "@/lib/db/products";
 
-export default function ShopPage() {
-  const realProducts = newArrivalsData;
+export default async function ShopPage() {
+  const realProducts = await getActiveProducts();
 
   return (
     <main>

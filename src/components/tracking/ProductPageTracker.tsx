@@ -8,7 +8,7 @@
 import { useProductPageTracker } from '@/hooks/useProductPageTracker'
 
 interface Props {
-  productId: number
+  productId: string
   productSlug: string
 }
 
