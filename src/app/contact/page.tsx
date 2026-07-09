@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { useState } from "react";
 import { useForm } from "react-hook-form";
@@ -8,7 +8,7 @@ import { FaCheckCircle } from "react-icons/fa";
 import { FaCircleXmark } from "react-icons/fa6";
 import { submitContactAction } from "@/app/actions/contact";
 
-// â”€â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Types ─────────────────────────────────────────────────────────────────
 
 type FormValues = {
   name: string;
@@ -16,7 +16,7 @@ type FormValues = {
   message: string;
 };
 
-// â”€â”€â”€ Helpers â€” same pattern as checkout pages â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Helpers — same pattern as checkout pages ───────────────────────────────
 
 function InputWrapper({
   label,
@@ -58,7 +58,7 @@ const inputCls = (error?: string, success?: boolean) =>
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-// â”€â”€â”€ Page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Page ──────────────────────────────────────────────────────────────────
 
 export default function ContactPage() {
   const [submitting, setSubmitting] = useState(false);
@@ -85,19 +85,19 @@ export default function ContactPage() {
         setSubmitted(true);
       }
     } catch {
-      setSubmitError("Error inesperado. IntÃ©ntalo de nuevo.");
+      setSubmitError("Error inesperado. Inténtalo de nuevo.");
     } finally {
       setSubmitting(false);
     }
   };
 
-  // â”€â”€ Success state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Success state ─────────────────────────────────────────────────────────
   if (submitted) {
     return (
       <main className="min-h-[60vh] flex flex-col items-center justify-center px-4 py-16 text-center">
         <FaCheckCircle className="text-[#487D26] text-6xl mb-6" />
         <h1 className={cn(integralCF.className, "text-3xl md:text-4xl mb-4")}>
-          Â¡Mensaje enviado!
+          ¡Mensaje enviado!
         </h1>
         <p className="text-black/60 max-w-md">
           Hemos recibido tu mensaje. Te responderemos lo antes posible.
@@ -106,7 +106,7 @@ export default function ContactPage() {
     );
   }
 
-  // â”€â”€ Form â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Form ───────────────────────────────────────────────────────────────────
   return (
     <main>
       <div className="max-w-frame mx-auto px-4 xl:px-0">
@@ -121,7 +121,7 @@ export default function ContactPage() {
           Contacto
         </h1>
         <p className="text-black/60 text-sm md:text-base mb-8 max-w-[560px]">
-          Â¿Tienes alguna pregunta sobre nuestros productos? EscrÃ­benos y te
+          ¿Tienes alguna pregunta sobre nuestros productos? Escríbenos y te
           responderemos lo antes posible.
         </p>
 
@@ -149,7 +149,7 @@ export default function ContactPage() {
                 )}
                 {...register("name", {
                   required: "El nombre es obligatorio",
-                  minLength: { value: 2, message: "MÃ­nimo 2 caracteres" },
+                  minLength: { value: 2, message: "Mínimo 2 caracteres" },
                 })}
               />
             </InputWrapper>
@@ -174,7 +174,7 @@ export default function ContactPage() {
                   required: "El email es obligatorio",
                   pattern: {
                     value: EMAIL_RE,
-                    message: "Introduce un email vÃ¡lido",
+                    message: "Introduce un email válido",
                   },
                 })}
               />
@@ -192,7 +192,7 @@ export default function ContactPage() {
             >
               <textarea
                 rows={5}
-                placeholder="Â¿En quÃ© podemos ayudarte?"
+                placeholder="¿En qué podemos ayudarte?"
                 className={cn(
                   inputCls(
                     errors.message?.message,
@@ -207,7 +207,7 @@ export default function ContactPage() {
                   required: "El mensaje es obligatorio",
                   minLength: {
                     value: 10,
-                    message: "MÃ­nimo 10 caracteres",
+                    message: "Mínimo 10 caracteres",
                   },
                 })}
               />
