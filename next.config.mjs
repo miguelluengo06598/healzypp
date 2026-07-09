@@ -7,15 +7,15 @@ const isDev = process.env.NODE_ENV === "development";
 const csp = [
   "default-src 'self'",
   // Scripts: propio dominio + Stripe + Mapbox
-  `script-src 'self' 'unsafe-inline' ${isDev ? "'unsafe-eval'" : ""} https://js.stripe.com https://api.mapbox.com https://events.mapbox.com`,
+  `script-src 'self' 'unsafe-inline' ${isDev ? "'unsafe-eval'" : ""} https://js.stripe.com https://api.mapbox.com https://events.mapbox.com https://connect.facebook.net`,
   // Estilos: propio dominio + inline (Tailwind/Stripe Elements los necesita)
   "style-src 'self' 'unsafe-inline'",
   // Imágenes: propio dominio + Supabase Storage + Stripe + data URIs
-  "img-src 'self' data: blob: https://ahxfrlbookvbszrnclpq.supabase.co https://*.stripe.com",
+  "img-src 'self' data: blob: https://ahxfrlbookvbszrnclpq.supabase.co https://*.stripe.com https://www.facebook.com",
   // Fuentes
   "font-src 'self' data:",
   // Conexiones: propio dominio + Stripe + Supabase + Mapbox
-  "connect-src 'self' https://api.stripe.com https://*.supabase.co https://api.mapbox.com https://events.mapbox.com",
+  "connect-src 'self' https://api.stripe.com https://*.supabase.co https://api.mapbox.com https://events.mapbox.com https://www.facebook.com https://connect.facebook.net",
   // iframes: solo Stripe (para 3D Secure)
   "frame-src https://js.stripe.com https://hooks.stripe.com",
   // Formularios solo al propio dominio

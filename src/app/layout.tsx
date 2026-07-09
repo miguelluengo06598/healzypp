@@ -8,7 +8,8 @@ import HolyLoader from "holy-loader";
 import Providers from "./providers";
 import { TrackingProvider } from "@/components/tracking/TrackingProvider";
 import CookieBanner from "@/components/ui/CookieBanner";
-import MetaPixel from "@/components/tracking/MetaPixel";
+import MetaPixel from "@/components/tracking/MetaPixel"
+import { MetaPageViewTracker } from "@/components/tracking/MetaPageViewTracker";
 
 import StickySmartCart from "@/components/StickySmartCart";
 import { ProductPreviewProvider } from "@/components/ProductPreviewContext";
@@ -53,6 +54,7 @@ export default function RootLayout({
         <Footer />
         <CookieBanner />
         <MetaPixel />
+        <MetaPageViewTracker />
       </body>
     </html>
   );

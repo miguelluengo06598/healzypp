@@ -75,6 +75,11 @@ function makeRatelimit(requests: number, window: string) {
           "[ratelimit] Redis error — permitiendo petición:",
           err instanceof Error ? err.message : String(err)
         );
+        // FAIL-OPEN INTENCIONAL: si Redis no está disponible, dejamos pasar
+        // la petición en lugar de devolver 429 o 500. La disponibilidad del
+        // checkout tiene prioridad sobre el rate limiting. Si Upstash tiene un
+        // outage, los endpoints siguen funcionando; los abusos en ese período
+        // son un riesgo aceptado. NO "arreglar" esto devolviendo success:false.
         return {
           success: true as const,
           limit: requests,

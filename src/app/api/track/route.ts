@@ -151,6 +151,12 @@ export async function POST(req: NextRequest) {
 
   const { session, events } = parsed.data
 
+  // Geolocalización por IP desde cabeceras de Vercel (solo disponibles en prod/preview).
+  // En local quedan null sin romper nada. Tienen prioridad sobre lo que envíe el cliente.
+  const geoCountry = req.headers.get('x-vercel-ip-country') ?? session.country ?? null
+  const geoRegion  = req.headers.get('x-vercel-ip-country-region') ?? session.region ?? null
+  const geoCity    = req.headers.get('x-vercel-ip-city') ?? session.city ?? null
+
   try {
     const supabase = createServiceClient()
 
@@ -164,9 +170,9 @@ export async function POST(req: NextRequest) {
           fingerprint: session.fingerprint,
           device_type: session.device_type,
           device_info: session.device_info,
-          country: session.country,
-          region: session.region,
-          city: session.city,
+          country: geoCountry,
+          region: geoRegion,
+          city: geoCity,
           referrer: session.referrer,
           landing_page: session.landing_page,
           utm_source: session.utm_source,

@@ -45,6 +45,16 @@ function getFbq(): Window['fbq'] | null {
   return null
 }
 
+function getFbCookies(): { fbc?: string; fbp?: string } {
+  if (typeof document === 'undefined') return {}
+  const fbc = document.cookie.match(/_fbc=([^;]+)/)?.[1]
+  const fbp = document.cookie.match(/_fbp=([^;]+)/)?.[1]
+  return {
+    ...(fbc ? { fbc } : {}),
+    ...(fbp ? { fbp } : {}),
+  }
+}
+
 async function sendCAPI(
   eventName: string,
   eventId: string,
@@ -59,7 +69,7 @@ async function sendCAPI(
         event_name: eventName,
         event_id:   eventId,
         event_data: customData,
-        user_data:  userData ?? {},
+        user_data:  { ...getFbCookies(), ...(userData ?? {}) },
       }),
       keepalive: true,
     })
@@ -104,20 +114,24 @@ export function useMetaPixel() {
   )
 
   const trackPageView = useCallback(() => {
+    if (!enabled) return
     const fbq = getFbq()
-    if (fbq && enabled) {
-      fbq('track', 'PageView')
+    const eventId = generateEventId()
+    if (fbq) {
+      fbq('track', 'PageView', {}, { eventID: eventId })
     }
+    sendCAPI('PageView', eventId, { event_source_url: window.location.href })
   }, [enabled])
 
   const trackViewContent = useCallback(
     (product: ProductData) => {
       track('ViewContent', {
-        content_ids:  [product.slug ?? String(product.id)],
+        content_ids:  [String(product.id)],
         content_name: product.name,
         content_type: 'product',
         value:        product.price,
         currency:     product.currency ?? 'EUR',
+        content_slug: product.slug,
       })
     },
     [track]
@@ -126,7 +140,7 @@ export function useMetaPixel() {
   const trackAddToCart = useCallback(
     (product: ProductData, quantity = 1) => {
       track('AddToCart', {
-        content_ids:  [product.slug ?? String(product.id)],
+        content_ids:  [String(product.id)],
         content_name: product.name,
         content_type: 'product',
         value:        product.price * quantity,
@@ -149,14 +163,19 @@ export function useMetaPixel() {
     [track]
   )
 
-  /** Dispara Purchase en navegador + CAPI con el event_id indicado.
-   *  Pasar `purchase_${orderNumber}` garantiza deduplicación con el CAPI del servidor. */
+  /**
+   * Dispara Purchase SOLO en el pixel de navegador (fbq).
+   * El CAPI lo envía el servidor (webhook Stripe o server action COD) con el
+   * mismo event_id determinístico → Meta deduplica automáticamente browser+CAPI.
+   * No llamar a sendCAPI aquí evita el triple envío que generaba doble conteo.
+   */
   const trackPurchase = useCallback(
     (order: OrderData, overrideEventId?: string) => {
+      if (!enabled) return
       const eventId = overrideEventId ?? getPurchaseEventId(order.orderNumber)
-      track(
-        'Purchase',
-        {
+      const fbq = getFbq()
+      if (fbq) {
+        fbq('track', 'Purchase', {
           content_ids:  order.items.map((i) => String(i.id)),
           content_name: 'Compra HEALZYP',
           content_type: 'product',
@@ -164,12 +183,10 @@ export function useMetaPixel() {
           currency:     order.currency,
           num_items:    order.items.reduce((sum, i) => sum + i.quantity, 0),
           order_id:     order.orderNumber,
-        },
-        order,
-        eventId
-      )
+        }, { eventID: eventId })
+      }
     },
-    [track]
+    [enabled]
   )
 
   return {

@@ -1,6 +1,6 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// ProductMetaTracker — Dispara eventos de Meta Pixel en la página de producto
-// ViewContent después de 5 segundos (engagement real).
+// ProductMetaTracker — Dispara ViewContent de Meta Pixel al montar la página de
+// producto. trackViewContent() ya comprueba internamente que fbq esté disponible.
 // ─────────────────────────────────────────────────────────────────────────────
 
 'use client'
@@ -19,17 +19,13 @@ export default function ProductMetaTracker({ productId, productSlug, productName
   const { trackViewContent } = useMetaPixel()
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      trackViewContent({
-        id: productId,
-        slug: productSlug,
-        name: productName,
-        price,
-        currency: 'EUR',
-      })
-    }, 5000)
-
-    return () => clearTimeout(timer)
+    trackViewContent({
+      id: productId,
+      slug: productSlug,
+      name: productName,
+      price,
+      currency: 'EUR',
+    })
   }, [productId, productSlug, productName, price, trackViewContent])
 
   return null
