@@ -5,7 +5,7 @@ import { createServiceClient } from "@/lib/supabase"
 import type { ShippingAddress, ShippingMethod } from "@/hooks/useCheckout"
 
 export interface CheckoutOrderItem {
-  productId: string | null
+  productId: number | null
   productTitle: string
   quantity: number
   unitPriceEur: number

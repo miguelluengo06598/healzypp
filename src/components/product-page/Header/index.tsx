@@ -35,22 +35,20 @@ const Header = ({ data }: { data: Product }) => {
           >
             {data.title}
           </h1>
-          {data.rating != null && (
-            <div className="flex items-center mb-3 sm:mb-3.5">
-              <Rating
-                initialValue={data.rating}
-                allowFraction
-                SVGclassName="inline-block"
-                emptyClassName="fill-gray-50"
-                size={25}
-                readonly
-              />
-              <span className="text-black text-xs sm:text-sm ml-[11px] sm:ml-[13px] pb-0.5 sm:pb-0">
-                {data.rating.toFixed(1)}
-                <span className="text-black/60">/5</span>
-              </span>
-            </div>
-          )}
+          <div className="flex items-center mb-3 sm:mb-3.5">
+            <Rating
+              initialValue={data.rating}
+              allowFraction
+              SVGclassName="inline-block"
+              emptyClassName="fill-gray-50"
+              size={25}
+              readonly
+            />
+            <span className="text-black text-xs sm:text-sm ml-[11px] sm:ml-[13px] pb-0.5 sm:pb-0">
+              {data.rating.toFixed(1)}
+              <span className="text-black/60">/5</span>
+            </span>
+          </div>
           {/* Benefit bubbles — replace description paragraph */}
           <div className="flex flex-wrap gap-2 mb-5">
             {BENEFIT_BUBBLES.map((benefit) => (

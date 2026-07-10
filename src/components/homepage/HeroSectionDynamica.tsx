@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import AnimatedCounter from "@/components/ui/AnimatedCounter";
 import { cn } from "@/lib/utils";
 import { integralCF } from "@/styles/fonts";
-import type { Product } from "@/types/product.types";
+import { newArrivalsData } from "@/data/products";
 
 /* ------------------------------------------------------------------ */
 /*  TYPES                                                              */
@@ -104,11 +104,7 @@ const HeroSkeleton: React.FC = () => {
 /*  MAIN COMPONENT                                                     */
 /* ------------------------------------------------------------------ */
 
-interface HeroSectionDynamicaProps {
-  featuredProduct: Product | null;
-}
-
-const HeroSectionDynamica: React.FC<HeroSectionDynamicaProps> = ({ featuredProduct }) => {
+const HeroSectionDynamica: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const containerRef = useRef<HTMLElement>(null);
 
@@ -335,7 +331,7 @@ const HeroSectionDynamica: React.FC<HeroSectionDynamicaProps> = ({ featuredProdu
               >
                 <div className="relative w-12 h-12 rounded-[10px] bg-[#F0EEED] overflow-hidden shrink-0">
                   <Image
-                    src={featuredProduct?.srcUrl ?? "/images/FL1.png"}
+                    src={newArrivalsData[0]?.srcUrl ?? "/images/FL1.png"}
                     alt="Producto"
                     fill
                     className="object-contain p-1"

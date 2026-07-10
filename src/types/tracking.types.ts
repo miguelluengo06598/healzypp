@@ -69,14 +69,14 @@ export interface PageViewEvent extends BaseTrackingEvent {
 
 export interface ProductViewEvent extends BaseTrackingEvent {
   eventType: 'product_view'
-  productId: number | string
+  productId: number
   productSlug: string
   durationSeconds?: number
 }
 
 export interface CartActionEvent extends BaseTrackingEvent {
   eventType: 'cart_action'
-  productId: number | string
+  productId: number
   bundleId?: number | null
   action: CartAction
   quantity: number
@@ -116,27 +116,27 @@ export interface HeartbeatEvent extends BaseTrackingEvent {
 
 export interface ProductPageEnterEvent extends BaseTrackingEvent {
   eventType: 'product_page_enter'
-  productId: string
+  productId: number
   productSlug: string
 }
 
 export interface ProductSectionViewEvent extends BaseTrackingEvent {
   eventType: 'product_section_view'
-  productId: string
+  productId: number
   productSlug: string
   section: string
 }
 
 export interface ProductScrollDepthEvent extends BaseTrackingEvent {
   eventType: 'product_scroll_depth'
-  productId: string
+  productId: number
   productSlug: string
   depthPercent: number
 }
 
 export interface ProductInteractionEvent extends BaseTrackingEvent {
   eventType: 'product_interaction'
-  productId: string
+  productId: number
   productSlug: string
   action: 'add_to_cart' | 'buy_now' | 'bundle_select' | 'scroll'
   extra?: Record<string, unknown>
@@ -144,7 +144,7 @@ export interface ProductInteractionEvent extends BaseTrackingEvent {
 
 export interface ProductPageExitEvent extends BaseTrackingEvent {
   eventType: 'product_page_exit'
-  productId: string
+  productId: number
   productSlug: string
   totalSeconds: number
   lastSection: string
