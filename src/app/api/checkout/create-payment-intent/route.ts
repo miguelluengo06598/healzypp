@@ -5,6 +5,7 @@ import { BUNDLES } from "@/lib/bundles"
 import { SHIPPING_OPTIONS, FREE_SHIPPING_THRESHOLD_EUR } from "@/lib/shipping"
 import { createCheckoutOrder, attachPaymentIntent } from "@/lib/db/checkout-orders"
 import { paymentIntentRatelimit, getClientIp } from "@/lib/rate-limit"
+import { isTrustedOrigin } from "@/lib/security/origin-check"
 import { getCurrentUserId } from "@/lib/supabase-server"
 import { createServiceClient } from "@/lib/supabase"
 import type { ShippingAddress, ShippingMethod } from "@/hooks/useCheckout"
@@ -113,6 +114,11 @@ async function getVerifiedItemPrice(
 }
 
 export async function POST(req: NextRequest) {
+  // ── CSRF: rechazar peticiones que no vengan del propio origen ───────────────
+  if (!isTrustedOrigin(req)) {
+    return NextResponse.json({ error: "Origen no permitido." }, { status: 403 })
+  }
+
   // Rate limit
   const ip = getClientIp(req)
   const { success: allowed } = await paymentIntentRatelimit.limit(ip)

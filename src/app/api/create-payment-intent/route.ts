@@ -3,6 +3,7 @@ import Stripe from "stripe";
 import { z } from "zod";
 import { BUNDLES } from "@/lib/bundles";
 import { paymentIntentRatelimit, getClientIp } from "@/lib/rate-limit";
+import { isTrustedOrigin } from "@/lib/security/origin-check";
 import { createServiceClient } from "@/lib/supabase";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
@@ -15,6 +16,11 @@ const BodySchema = z.object({
 });
 
 export async function POST(req: NextRequest) {
+  // ── CSRF: rechazar peticiones que no vengan del propio origen ───────────────
+  if (!isTrustedOrigin(req)) {
+    return NextResponse.json({ error: "Origen no permitido." }, { status: 403 });
+  }
+
   // ── Rate limiting: 10 intentos por IP por hora (Upstash Redis) ──────────────
   const ip = getClientIp(req);
 
