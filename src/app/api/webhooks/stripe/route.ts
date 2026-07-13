@@ -45,6 +45,16 @@ export async function POST(req: NextRequest) {
     switch (event.type) {
       case "payment_intent.succeeded": {
         const pi = event.data.object as Stripe.PaymentIntent;
+
+        // ── Idempotencia: Stripe puede reenviar el mismo evento (redelivery).
+        //    Si el pedido ya está 'pagado', no repetir notificaciones ni el
+        //    decremento de stock — solo confirmar recepción a Stripe.
+        const existingOrder = await getOrderByStripePaymentIntentId(pi.id);
+        if (existingOrder?.estado === "pagado") {
+          console.log("[stripe-webhook] Redelivery ignorado, pedido ya pagado:", pi.id);
+          break;
+        }
+
         await updateOrderPaymentStatus(pi.id, "PAID");
         console.log("[stripe-webhook] Pago confirmado:", pi.id);
 
