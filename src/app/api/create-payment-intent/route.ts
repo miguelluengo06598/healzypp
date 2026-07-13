@@ -3,6 +3,7 @@ import Stripe from "stripe";
 import { z } from "zod";
 import { BUNDLES } from "@/lib/bundles";
 import { paymentIntentRatelimit, getClientIp } from "@/lib/rate-limit";
+import { createServiceClient } from "@/lib/supabase";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2026-04-22.dahlia",
@@ -66,8 +67,68 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Bundle no válido." }, { status: 400 });
     }
 
+    // ── Verificar precio real en Supabase antes de cobrar — el precio del mock
+    //    (BUNDLES) es solo lo que ve el cliente; el importe que se cobra sale
+    //    siempre de la fuente de verdad (bundles.precio), nunca del frontend ──
+    let db: ReturnType<typeof createServiceClient>;
+    try {
+      db = createServiceClient();
+    } catch (e) {
+      console.error("[create-payment-intent] Supabase no inicializado:", e);
+      return NextResponse.json({ error: "Error interno del servidor." }, { status: 500 });
+    }
+
+    const { data: bundleRow, error: bundleError } = await db
+      .from("bundles")
+      .select("id, product_id, cantidad, precio, activo")
+      .eq("cantidad", bundleId)
+      .eq("activo", true)
+      .maybeSingle();
+
+    if (bundleError) {
+      console.error("[create-payment-intent] error consultando bundle:", bundleError.message);
+      return NextResponse.json({ error: "Error interno del servidor." }, { status: 500 });
+    }
+
+    if (!bundleRow) {
+      return NextResponse.json(
+        { error: "El bundle solicitado no está disponible actualmente." },
+        { status: 400 }
+      );
+    }
+
+    const { data: productRow, error: productError } = await db
+      .from("products")
+      .select("id, precio, activo")
+      .eq("id", bundleRow.product_id)
+      .eq("activo", true)
+      .maybeSingle();
+
+    if (productError) {
+      console.error("[create-payment-intent] error consultando producto:", productError.message);
+      return NextResponse.json({ error: "Error interno del servidor." }, { status: 500 });
+    }
+
+    if (!productRow) {
+      return NextResponse.json(
+        { error: "El producto asociado al bundle no está disponible." },
+        { status: 400 }
+      );
+    }
+
+    const realPriceCents = Math.round(Number(bundleRow.precio) * 100);
+    if (realPriceCents !== bundle.priceInCents) {
+      console.error(
+        `[create-payment-intent] precio no coincide — mock: ${bundle.priceInCents}c, Supabase: ${realPriceCents}c (bundleId=${bundleId})`
+      );
+      return NextResponse.json(
+        { error: "El precio del bundle no coincide con el precio real. Pago rechazado." },
+        { status: 400 }
+      );
+    }
+
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: bundle.priceInCents,
+      amount: realPriceCents,
       currency: "eur",
       capture_method: "automatic",
       metadata: { bundleId: String(bundleId), bundleName: bundle.name },

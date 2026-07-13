@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import Stripe from "stripe"
 import { z } from "zod"
-import { newArrivalsData, topSellingData } from "@/data/products"
+import { BUNDLES } from "@/lib/bundles"
 import { SHIPPING_OPTIONS, FREE_SHIPPING_THRESHOLD_EUR } from "@/lib/shipping"
 import { createCheckoutOrder, attachPaymentIntent } from "@/lib/db/checkout-orders"
 import { paymentIntentRatelimit, getClientIp } from "@/lib/rate-limit"
@@ -12,11 +12,6 @@ import type { ShippingAddress, ShippingMethod } from "@/hooks/useCheckout"
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2026-04-22.dahlia",
 })
-
-// Deduplicated static product catalog for server-side price verification
-const PRODUCT_CATALOG = [...newArrivalsData, ...topSellingData].filter(
-  (p, i, arr) => arr.findIndex((x) => x.id === p.id) === i
-)
 
 const ShippingAddressSchema = z.object({
   firstName: z.string().min(1).max(100).trim(),
@@ -51,29 +46,58 @@ const BodySchema = z.object({
   couponDiscountEur: z.number().min(0).max(10000).default(0),
 })
 
-/** Server-verified adjusted price for a product */
-function getVerifiedItemPrice(
-  productId: number,
+/**
+ * Server-verified price para un item del carrito, contra los datos reales de
+ * Supabase (bundles/products) — nunca contra el catálogo mock ni un precio
+ * enviado por el cliente.
+ *
+ * La tienda solo vende un producto real en 3 tamaños de bundle. El `id` del
+ * item del carrito viene del catálogo mock (legacy, sin correspondencia con
+ * el UUID real de Supabase), así que el único dato fiable para identificar
+ * QUÉ se está comprando es el nombre del bundle en `attributes[0]` (p.ej.
+ * "2 Botes"), que se traduce a `cantidad` en la tabla `bundles` real.
+ */
+async function getVerifiedItemPrice(
+  db: ReturnType<typeof createServiceClient>,
+  attributes: string[],
   quantity: number
-): { unitPriceEur: number; discountEur: number; totalEur: number; title: string } | null {
-  const product = PRODUCT_CATALOG.find((p) => p.id === productId)
-  if (!product) return null
+): Promise<{ unitPriceEur: number; discountEur: number; totalEur: number; title: string } | null> {
+  const bundleName = attributes[0]
+  const mockBundle = BUNDLES.find((b) => b.name === bundleName)
+  if (!mockBundle) return null
 
-  const basePrice = product.price
-  let adjustedPrice = basePrice
+  const { data: bundleRow, error: bundleError } = await db
+    .from("bundles")
+    .select("id, product_id, cantidad, precio, activo")
+    .eq("cantidad", mockBundle.id)
+    .eq("activo", true)
+    .maybeSingle()
 
-  if (product.discount.percentage > 0) {
-    adjustedPrice = Math.round(basePrice * (1 - product.discount.percentage / 100))
-  } else if (product.discount.amount > 0) {
-    adjustedPrice = Math.round(basePrice - product.discount.amount)
+  if (bundleError) {
+    console.error("[checkout/create-payment-intent] error consultando bundle:", bundleError.message)
+    return null
   }
+  if (!bundleRow) return null
 
-  const discountEur = basePrice - adjustedPrice
+  const { data: productRow, error: productError } = await db
+    .from("products")
+    .select("id, nombre, precio, activo")
+    .eq("id", bundleRow.product_id)
+    .eq("activo", true)
+    .maybeSingle()
+
+  if (productError) {
+    console.error("[checkout/create-payment-intent] error consultando producto:", productError.message)
+    return null
+  }
+  if (!productRow) return null
+
+  const unitPriceEur = Number(bundleRow.precio)
   return {
-    unitPriceEur: adjustedPrice,
-    discountEur,
-    totalEur: adjustedPrice * quantity,
-    title: product.title,
+    unitPriceEur,
+    discountEur: 0,
+    totalEur: unitPriceEur * quantity,
+    title: `${productRow.nombre} — ${mockBundle.name}`,
   }
 }
 
@@ -108,7 +132,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Método de envío no válido." }, { status: 400 })
   }
 
-  // Server-verify all product prices
+  // Server-verify all product prices contra Supabase — sin fallback al precio
+  // del frontend si algún item no coincide con un bundle/producto real
+  let db: ReturnType<typeof createServiceClient>
+  try {
+    db = createServiceClient()
+  } catch (e) {
+    console.error("[checkout/create-payment-intent] Supabase no inicializado:", e)
+    return NextResponse.json({ error: "Error interno del servidor." }, { status: 500 })
+  }
+
   const verifiedItems: Array<{
     productId: number
     productTitle: string
@@ -120,10 +153,10 @@ export async function POST(req: NextRequest) {
   let subtotalEur = 0
 
   for (const item of items) {
-    const verified = getVerifiedItemPrice(item.id, item.quantity)
+    const verified = await getVerifiedItemPrice(db, item.attributes, item.quantity)
     if (!verified) {
       return NextResponse.json(
-        { error: `Producto ${item.id} no encontrado.` },
+        { error: `El artículo ${item.id} no coincide con un producto/bundle real disponible. Pago rechazado.` },
         { status: 400 }
       )
     }
