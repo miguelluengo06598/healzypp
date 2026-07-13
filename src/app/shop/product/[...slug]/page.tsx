@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { newArrivalsData, relatedProductData } from "@/data/products";
 import ProductListSec from "@/components/common/ProductListSec";
 import BreadcrumbProduct from "@/components/product-page/BreadcrumbProduct";
@@ -7,8 +8,34 @@ import ProductPageTracker from "@/components/tracking/ProductPageTracker";
 import ProductMetaTracker from "@/components/tracking/ProductMetaTracker";
 import ProductSectionWrapper from "@/components/tracking/ProductSectionWrapper";
 import { notFound } from "next/navigation";
+import { SITE_NAME, SITE_URL, productPath } from "@/lib/site";
 
 const data = newArrivalsData;
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string[] }>;
+}): Promise<Metadata> {
+  const { slug } = await params;
+  const product = data.find((p) => p.id === Number(slug[0]));
+
+  // Producto inexistente: la página renderiza notFound(); no hay metadata que aportar
+  if (!product) return {};
+
+  const title = `${product.title} | ${SITE_NAME}`;
+  // Sin rating/nº de reseñas: los valores del mock (4.8, 128) son placeholders
+  // sin respaldo real — no indexar cifras inventadas.
+  const description = `Compra ${product.title} online en ${SITE_NAME}. Pago seguro con tarjeta y envío a toda España.`;
+
+  return {
+    title,
+    description,
+    alternates: {
+      canonical: `${SITE_URL}${productPath(product.id, product.title)}`,
+    },
+  };
+}
 
 export default async function ProductPage({
   params,
