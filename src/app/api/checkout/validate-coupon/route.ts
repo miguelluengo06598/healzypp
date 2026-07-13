@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 import { createServiceClient } from "@/lib/supabase"
+import { couponRatelimit, getClientIp } from "@/lib/rate-limit"
+import { isTrustedOrigin } from "@/lib/security/origin-check"
 
 const BodySchema = z.object({
   code: z.string().min(1).max(50).trim().toUpperCase(),
@@ -21,6 +23,38 @@ interface CouponRow {
 }
 
 export async function POST(req: NextRequest) {
+  // ── CSRF: rechazar peticiones que no vengan del propio origen ───────────────
+  if (!isTrustedOrigin(req)) {
+    return NextResponse.json({ error: "Origen no permitido." }, { status: 403 })
+  }
+
+  // ── Rate limiting: previene fuerza bruta de códigos de cupón ────────────────
+  const ip = getClientIp(req)
+
+  let allowed = true
+  let remaining = 0
+  try {
+    const result = await couponRatelimit.limit(ip)
+    allowed = result.success
+    remaining = result.remaining
+  } catch (err) {
+    console.error("[ratelimit] Redis error, skipping:", err)
+    allowed = true
+  }
+
+  if (!allowed) {
+    return NextResponse.json(
+      { error: "Demasiados intentos. Inténtalo más tarde." },
+      {
+        status: 429,
+        headers: {
+          "Retry-After": String(3600),
+          "X-RateLimit-Remaining": String(remaining),
+        },
+      }
+    )
+  }
+
   let body: unknown
   try {
     body = await req.json()

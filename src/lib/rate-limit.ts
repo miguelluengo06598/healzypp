@@ -97,6 +97,9 @@ function makeRatelimit(requests: number, window: string) {
 /** POST /api/create-payment-intent y /api/checkout/create-payment-intent */
 export const paymentIntentRatelimit = makeRatelimit(10, "1 h");
 
+/** POST /api/checkout/validate-coupon */
+export const couponRatelimit = makeRatelimit(15, "1 h");
+
 /** POST /api/track */
 export const trackRatelimit = makeRatelimit(60, "1 m");
 
