@@ -15,7 +15,8 @@ export type Product = {
   gallery?: string[];
   price: number;
   discount: Discount;
-  rating: number;
+  /** Opcional: solo poblar con una media calculada de reseñas reales, nunca placeholder */
+  rating?: number;
   // Nuevos campos opcionales para ProductCard mejorado
   reviewsCount?: number;
   stock?: number;

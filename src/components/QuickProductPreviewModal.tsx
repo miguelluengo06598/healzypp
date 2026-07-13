@@ -335,25 +335,27 @@ const QuickProductPreviewModal: React.FC = () => {
               {product.title}
             </h2>
 
-            {/* Rating */}
-            <div className="flex items-center gap-2 mb-4">
-              <Rating
-                initialValue={product.rating}
-                allowFraction
-                SVGclassName="inline-block"
-                emptyClassName="fill-gray-50"
-                size={20}
-                readonly
-              />
-              <span className="text-sm font-medium text-black">
-                {product.rating.toFixed(1)}
-              </span>
-              {product.reviewsCount != null && (
-                <span className="text-xs text-black/40">
-                  ({product.reviewsCount} reseñas)
+            {/* Rating — solo con datos reales (sin placeholder) */}
+            {product.rating != null && (
+              <div className="flex items-center gap-2 mb-4">
+                <Rating
+                  initialValue={product.rating}
+                  allowFraction
+                  SVGclassName="inline-block"
+                  emptyClassName="fill-gray-50"
+                  size={20}
+                  readonly
+                />
+                <span className="text-sm font-medium text-black">
+                  {product.rating.toFixed(1)}
                 </span>
-              )}
-            </div>
+                {product.reviewsCount != null && (
+                  <span className="text-xs text-black/40">
+                    ({product.reviewsCount} reseñas)
+                  </span>
+                )}
+              </div>
+            )}
 
             {/* Benefits */}
             <div className="flex flex-wrap gap-2 mb-5">

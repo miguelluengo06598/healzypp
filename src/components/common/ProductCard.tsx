@@ -286,21 +286,23 @@ const ProductCard = ({ data }: ProductCardProps) => {
           </h3>
         </Link>
 
-        {/* ---------- Social proof ---------- */}
+        {/* ---------- Social proof — solo con datos reales (sin placeholder) ---------- */}
         <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex items-end">
-            <Rating
-              initialValue={data.rating}
-              allowFraction
-              SVGclassName="inline-block"
-              emptyClassName="fill-gray-50"
-              size={16}
-              readonly
-            />
-            <span className="text-black text-xs ml-1.5 font-medium">
-              {data.rating.toFixed(1)}
-            </span>
-          </div>
+          {data.rating != null && (
+            <div className="flex items-end">
+              <Rating
+                initialValue={data.rating}
+                allowFraction
+                SVGclassName="inline-block"
+                emptyClassName="fill-gray-50"
+                size={16}
+                readonly
+              />
+              <span className="text-black text-xs ml-1.5 font-medium">
+                {data.rating.toFixed(1)}
+              </span>
+            </div>
+          )}
 
           {data.reviewsCount != null && (
             <span className="text-[11px] text-black/40">

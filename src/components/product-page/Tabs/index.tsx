@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import React, { useState } from "react";
 import ProductDetailsContent from "./ProductDetailsContent";
-import ReviewsContent from "./ReviewsContent";
 import FaqContent from "./FaqContent";
 
 type TabBtn = {
@@ -12,14 +11,12 @@ type TabBtn = {
   label: string;
 };
 
+// La pestaña "Valoraciones y Reseñas" se eliminó junto con las reseñas
+// placeholder — no había reseñas reales que mostrar.
 const tabBtnData: TabBtn[] = [
   {
     id: 1,
     label: "Detalles del Producto",
-  },
-  {
-    id: 2,
-    label: "Valoraciones y Reseñas",
   },
   {
     id: 3,
@@ -52,7 +49,6 @@ const Tabs = () => {
       </div>
       <div className="mb-12 sm:mb-16">
         {active === 1 && <ProductDetailsContent />}
-        {active === 2 && <ReviewsContent />}
         {active === 3 && <FaqContent />}
       </div>
     </div>
