@@ -251,7 +251,33 @@ CREATE TABLE product_variants (
 COMMENT ON TABLE product_variants IS 'Variantes de productos (talla, color, etc.)';
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- 5.5 coupons
+-- 5.5 bundles
+-- Fuente de verdad del precio para los endpoints de PaymentIntent — tabla
+-- real de producción, documentada aquí para que el schema versionado en git
+-- coincida con la base de datos real (no se ejecuta contra Supabase, ya
+-- existe en producción).
+-- ─────────────────────────────────────────────────────────────────────────────
+
+CREATE TABLE bundles (
+  id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  product_id         UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  nombre             VARCHAR(255) NOT NULL,
+  cantidad           INTEGER NOT NULL CHECK (cantidad > 0),
+  precio             DECIMAL(10, 2) NOT NULL CHECK (precio >= 0),
+  precio_original    DECIMAL(10, 2) CHECK (precio_original >= 0),
+  ahorro             DECIMAL(10, 2) CHECK (ahorro >= 0),
+  porcentaje_dto     INTEGER CHECK (porcentaje_dto >= 0 AND porcentaje_dto <= 100),
+  precio_por_unidad  DECIMAL(10, 2) CHECK (precio_por_unidad >= 0),
+  es_popular         BOOLEAN DEFAULT false,
+  activo             BOOLEAN DEFAULT true,
+  orden              INTEGER DEFAULT 0,
+  fecha_creacion     TIMESTAMPTZ DEFAULT NOW()
+);
+
+COMMENT ON TABLE bundles IS 'Bundles/packs de un producto (p.ej. 1/2/3 botes) — fuente de verdad del precio cobrado en Stripe';
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- 5.6 coupons
 -- ─────────────────────────────────────────────────────────────────────────────
 
 CREATE TABLE coupons (
@@ -273,7 +299,7 @@ CREATE TABLE coupons (
 COMMENT ON TABLE coupons IS 'Cupones de descuento';
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- 5.6 orders
+-- 5.7 orders
 -- ─────────────────────────────────────────────────────────────────────────────
 
 CREATE TABLE orders (
@@ -300,7 +326,7 @@ CREATE TABLE orders (
 COMMENT ON TABLE orders IS 'Pedidos realizados en la tienda';
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- 5.7 order_items
+-- 5.8 order_items
 -- ─────────────────────────────────────────────────────────────────────────────
 
 CREATE TABLE order_items (
@@ -320,7 +346,7 @@ COMMENT ON TABLE order_items IS 'Líneas de cada pedido';
 COMMENT ON COLUMN order_items.unidades_stock IS 'Unidades reales de stock (botes) que consume esta línea — bundle.cantidad × cantidad. Usado por decrement_product_stock() al confirmarse el pago.';
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- 5.8 order_tracking
+-- 5.9 order_tracking
 -- ─────────────────────────────────────────────────────────────────────────────
 
 CREATE TABLE order_tracking (
@@ -336,7 +362,7 @@ CREATE TABLE order_tracking (
 COMMENT ON TABLE order_tracking IS 'Historial de estados de un pedido';
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- 5.9 cart_items
+-- 5.10 cart_items
 -- ─────────────────────────────────────────────────────────────────────────────
 
 CREATE TABLE cart_items (
@@ -353,7 +379,7 @@ CREATE TABLE cart_items (
 COMMENT ON TABLE cart_items IS 'Carrito persistente en base de datos';
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- 5.10 reviews
+-- 5.11 reviews
 -- ─────────────────────────────────────────────────────────────────────────────
 
 CREATE TABLE reviews (
