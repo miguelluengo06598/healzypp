@@ -225,11 +225,14 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
   }
 
   // ── 6. Insertar historial de tracking ───────────────────────────────────────
+  // 'pendiente' porque el pedido se crea ANTES de confirmar el pago con Stripe
+  // (evita el riesgo de "pedido fantasma"); el webhook añade el tracking de
+  // 'pagado' cuando payment_intent.succeeded confirma el cobro.
   try {
     await db.from('order_tracking').insert({
       order_id: orderId,
-      estado: 'pagado',
-      descripcion: 'Pago confirmado correctamente',
+      estado: 'pendiente',
+      descripcion: 'Pedido creado, esperando confirmación de pago',
     })
   } catch (err) {
     console.warn('[createOrder] Error al insertar order_tracking:', err)

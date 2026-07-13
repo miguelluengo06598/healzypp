@@ -148,6 +148,7 @@ $$ LANGUAGE plpgsql;
 CREATE TYPE order_status_enum AS ENUM (
   'pendiente',
   'pagado',
+  'fallido',
   'procesando',
   'enviado',
   'entregado',

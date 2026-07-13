@@ -281,9 +281,11 @@ function SkeletonForm() {
 
 function CardForm({
   bundle,
+  paymentIntentId,
   onError,
 }: {
   bundle: Bundle;
+  paymentIntentId: string | null;
   onError: (msg: string) => void;
 }) {
   const stripe   = useStripe();
@@ -340,11 +342,41 @@ function CardForm({
       onError("El sistema de pago no está listo. Recarga la página.");
       return;
     }
+    if (!paymentIntentId) {
+      onError("El sistema de pago no está listo. Recarga la página.");
+      return;
+    }
 
     setSubmitting(true);
     onError("");
 
     try {
+      // ── Crear el pedido ANTES de confirmar el pago (estado 'pendiente') ──
+      // Evita el "pedido fantasma": si la conexión falla después de esto, el
+      // pedido ya existe en Supabase aunque el pago no se confirme; el
+      // webhook de Stripe es quien lo marca 'pagado' o 'fallido'.
+      const names       = data.fullName.split(" ");
+      const orderResult = await createOrderAction({
+        customerData: {
+          fullName:   data.fullName,
+          phone:      data.phone.replace(/[\s\-]/g, ""),
+          address:    data.address,
+          postalCode: data.postcode,
+          city:       data.city,
+          province:   data.province,
+          email:      data.email,
+        },
+        bundleId:              bundle.id,
+        paymentMethod:         "CARD",
+        stripePaymentIntentId: paymentIntentId,
+      });
+
+      if (!orderResult.success) {
+        console.error("[CardForm] Order creation failed:", orderResult.error);
+        onError("No se pudo crear el pedido. Inténtalo de nuevo.");
+        return;
+      }
+
       const { error, paymentIntent } = await stripe.confirmPayment({
         elements,
         confirmParams: {
@@ -374,26 +406,6 @@ function CardForm({
       if (!paymentIntent || paymentIntent.status !== "succeeded") {
         onError("El pago no pudo completarse. Inténtalo de nuevo.");
         return;
-      }
-
-      const names       = data.fullName.split(" ");
-      const orderResult = await createOrderAction({
-        customerData: {
-          fullName:   data.fullName,
-          phone:      data.phone.replace(/[\s\-]/g, ""),
-          address:    data.address,
-          postalCode: data.postcode,
-          city:       data.city,
-          province:   data.province,
-          email:      data.email,
-        },
-        bundleId:              bundle.id,
-        paymentMethod:         "CARD",
-        stripePaymentIntentId: paymentIntent.id,
-      });
-
-      if (!orderResult.success) {
-        console.error("[CardForm] Order creation failed:", orderResult.error);
       }
 
       try {
@@ -616,7 +628,7 @@ function CardForm({
       {/* ── Botón de pago ────────────────────────────────────────────────── */}
       <button
         type="submit"
-        disabled={submitting || !stripe || !elements || !paymentReady}
+        disabled={submitting || !stripe || !elements || !paymentReady || !paymentIntentId}
         className={cn(
           "w-full h-12 rounded-full font-bold text-base transition-all",
           "flex items-center justify-center gap-2",
@@ -647,9 +659,10 @@ function CardForm({
 const CheckoutModal: React.FC<CheckoutModalProps> = ({ open, onOpenChange }) => {
   const [bundle,              setBundle]              = useState<Bundle | null>(null);
   const [clientSecret,        setClientSecret]        = useState<string | null>(null);
+  const [paymentIntentId,     setPaymentIntentId]     = useState<string | null>(null);
   const [clientSecretLoading, setClientSecretLoading] = useState(false);
   const [error,               setError]               = useState<string | null>(null);
-  const clientSecretCache = useRef<Record<number, string>>({});
+  const clientSecretCache = useRef<Record<number, { clientSecret: string; paymentIntentId: string }>>({});
 
   useEffect(() => {
     if (!open) return;
@@ -660,7 +673,8 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ open, onOpenChange }) => 
     if (b) {
       const cached = clientSecretCache.current[b.id];
       if (cached) {
-        setClientSecret(cached);
+        setClientSecret(cached.clientSecret);
+        setPaymentIntentId(cached.paymentIntentId);
         return;
       }
       setClientSecretLoading(true);
@@ -672,8 +686,12 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ open, onOpenChange }) => 
         .then(async res => {
           const data = await res.json();
           if (!res.ok) throw new Error(data.error || "Error del servidor");
-          clientSecretCache.current[b.id] = data.clientSecret;
+          clientSecretCache.current[b.id] = {
+            clientSecret: data.clientSecret,
+            paymentIntentId: data.paymentIntentId,
+          };
           setClientSecret(data.clientSecret);
+          setPaymentIntentId(data.paymentIntentId);
         })
         .catch(err => {
           console.error("[CheckoutModal] Error cargando clientSecret:", err);
@@ -690,6 +708,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ open, onOpenChange }) => 
     setTimeout(() => {
       setError(null);
       setClientSecret(null);
+      setPaymentIntentId(null);
     }, 300);
   }, [onOpenChange]);
 
@@ -766,7 +785,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ open, onOpenChange }) => 
                     locale:     "es",
                   }}
                 >
-                  <CardForm bundle={bundle} onError={handleError} />
+                  <CardForm bundle={bundle} paymentIntentId={paymentIntentId} onError={handleError} />
                 </Elements>
               ) : (
                 <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3">
