@@ -9,8 +9,16 @@ import ProductMetaTracker from "@/components/tracking/ProductMetaTracker";
 import ProductSectionWrapper from "@/components/tracking/ProductSectionWrapper";
 import { notFound } from "next/navigation";
 import { SITE_NAME, SITE_URL, productPath } from "@/lib/site";
+import { BUNDLES } from "@/lib/bundles";
+import type { Product } from "@/types/product.types";
 
 const data = newArrivalsData;
+
+// Sin rating/nº de reseñas: los valores del mock (4.8, 128) son placeholders
+// sin respaldo real — no indexar cifras inventadas.
+function productDescription(product: Product): string {
+  return `Compra ${product.title} online en ${SITE_NAME}. Pago seguro con tarjeta y envío a toda España.`;
+}
 
 export async function generateMetadata({
   params,
@@ -23,14 +31,9 @@ export async function generateMetadata({
   // Producto inexistente: la página renderiza notFound(); no hay metadata que aportar
   if (!product) return {};
 
-  const title = `${product.title} | ${SITE_NAME}`;
-  // Sin rating/nº de reseñas: los valores del mock (4.8, 128) son placeholders
-  // sin respaldo real — no indexar cifras inventadas.
-  const description = `Compra ${product.title} online en ${SITE_NAME}. Pago seguro con tarjeta y envío a toda España.`;
-
   return {
-    title,
-    description,
+    title: `${product.title} | ${SITE_NAME}`,
+    description: productDescription(product),
     alternates: {
       canonical: `${SITE_URL}${productPath(product.id, product.title)}`,
     },
@@ -51,8 +54,62 @@ export default async function ProductPage({
     notFound();
   }
 
+  const canonicalUrl = `${SITE_URL}${productPath(productData.id, productData.title)}`;
+
+  // Precio de entrada (pack de 1 bote) desde BUNDLES — anclado a producción:
+  // el endpoint de pago rechaza cualquier cobro si este valor diverge de
+  // bundles.precio en Supabase, así que no puede quedarse desactualizado
+  // sin romper el checkout.
+  const entryPriceEur = (Math.min(...BUNDLES.map((b) => b.priceInCents)) / 100).toFixed(2);
+
+  const productJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    name: productData.title,
+    image: (productData.gallery ?? [productData.srcUrl]).map((src) => `${SITE_URL}${src}`),
+    description: productDescription(productData),
+    sku: String(productData.id),
+    brand: { "@type": "Brand", name: SITE_NAME },
+    offers: {
+      "@type": "Offer",
+      price: entryPriceEur,
+      priceCurrency: "EUR",
+      availability:
+        (productData.stock ?? 0) > 0
+          ? "https://schema.org/InStock"
+          : "https://schema.org/OutOfStock",
+      itemCondition: "https://schema.org/NewCondition",
+      url: canonicalUrl,
+    },
+    // Sin aggregateRating: rating/reviewsCount del mock son placeholders y las
+    // estrellas falsas en rich snippets son motivo de acción manual de Google.
+  };
+
+  const breadcrumbJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    // Debe coincidir con el breadcrumb visible (BreadcrumbProduct): Inicio → Tienda → título
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Inicio", item: `${SITE_URL}/` },
+      { "@type": "ListItem", position: 2, name: "Tienda", item: `${SITE_URL}/shop` },
+      { "@type": "ListItem", position: 3, name: productData.title, item: canonicalUrl },
+    ],
+  };
+
   return (
     <main>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(productJsonLd).replace(/</g, "\\u003c"),
+        }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(breadcrumbJsonLd).replace(/</g, "\\u003c"),
+        }}
+      />
       <ProductPageTracker productId={productData.id} productSlug={slug[0]} />
       <ProductMetaTracker
         productId={productData.id}
