@@ -99,7 +99,7 @@ export async function POST(req: NextRequest) {
 
     const { data: productRow, error: productError } = await db
       .from("products")
-      .select("id, precio, activo")
+      .select("id, precio, activo, stock")
       .eq("id", bundleRow.product_id)
       .eq("activo", true)
       .maybeSingle();
@@ -112,6 +112,16 @@ export async function POST(req: NextRequest) {
     if (!productRow) {
       return NextResponse.json(
         { error: "El producto asociado al bundle no está disponible." },
+        { status: 400 }
+      );
+    }
+
+    // ── Comprobación de stock (sin bloqueo) — el decremento real solo ocurre
+    //    de forma atómica en el webhook cuando se confirma el pago ───────────
+    const unidadesStock = Number(bundleRow.cantidad);
+    if (productRow.stock < unidadesStock) {
+      return NextResponse.json(
+        { error: "No hay stock suficiente para este bundle." },
         { status: 400 }
       );
     }

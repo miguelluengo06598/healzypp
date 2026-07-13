@@ -113,6 +113,19 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+-- Decremento atómico de stock — solo debe llamarse al confirmarse un pago
+-- (webhook de Stripe, payment_intent.succeeded), nunca al crear el PaymentIntent.
+-- WHERE stock >= p_qty hace que el UPDATE sea atómico contra race conditions:
+-- si dos pagos concurrentes agotan el stock, solo uno consigue decrementar.
+CREATE OR REPLACE FUNCTION decrement_product_stock(p_product_id UUID, p_qty INTEGER)
+RETURNS BOOLEAN AS $$
+BEGIN
+  UPDATE products SET stock = stock - p_qty
+  WHERE id = p_product_id AND stock >= p_qty;
+  RETURN FOUND;
+END;
+$$ LANGUAGE plpgsql;
+
 -- Garantizar solo una dirección por defecto por usuario
 CREATE OR REPLACE FUNCTION ensure_single_default_address()
 RETURNS TRIGGER AS $$
@@ -298,10 +311,12 @@ CREATE TABLE order_items (
   imagen_producto   TEXT,
   cantidad          INTEGER NOT NULL CHECK (cantidad > 0),
   precio_unitario   DECIMAL(10, 2) NOT NULL CHECK (precio_unitario >= 0),
-  precio_total      DECIMAL(10, 2) NOT NULL CHECK (precio_total >= 0)
+  precio_total      DECIMAL(10, 2) NOT NULL CHECK (precio_total >= 0),
+  unidades_stock    INTEGER CHECK (unidades_stock >= 0)
 );
 
 COMMENT ON TABLE order_items IS 'Líneas de cada pedido';
+COMMENT ON COLUMN order_items.unidades_stock IS 'Unidades reales de stock (botes) que consume esta línea — bundle.cantidad × cantidad. Usado por decrement_product_stock() al confirmarse el pago.';
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 5.8 order_tracking

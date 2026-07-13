@@ -61,6 +61,7 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
     name: string
     price: number
     product_id: number | null
+    cantidad: number
   } | null = null
 
   try {
@@ -78,6 +79,7 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
         name: raw.nombre ?? 'Bundle',
         price: Number(raw.precio ?? 0),
         product_id: raw.product_id ?? null,
+        cantidad: Number(raw.cantidad ?? input.bundleId),
       }
     } else if (bundleError) {
       console.warn('[createOrder] No se pudo leer bundle:', bundleError.message)
@@ -110,9 +112,11 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
   // Si Supabase no respondió, usar datos locales o el precio que envió el cliente
   let unitPriceEur: number
   let bundleName: string
+  let unidadesStock: number
   if (bundle) {
     unitPriceEur = bundle.price
     bundleName = bundle.name
+    unidadesStock = bundle.cantidad
   } else {
     console.warn('[createOrder] Bundle no encontrado en Supabase, usando datos locales')
     const localBundle = BUNDLES.find(b => b.id === input.bundleId)
@@ -122,6 +126,7 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
         : null
     unitPriceEur = clientPriceEur ?? (localBundle ? localBundle.priceInCents / 100 : 0)
     bundleName = localBundle?.name ?? 'Bundle desconocido'
+    unidadesStock = localBundle?.id ?? input.bundleId
   }
 
   // ── 2. Upsert perfil en profiles solo si el usuario está autenticado ─
@@ -212,6 +217,7 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
       cantidad:        1,
       precio_unitario: unitPriceEur,
       precio_total:    unitPriceEur,
+      unidades_stock:  unidadesStock,
     })
 
   if (itemError) {
@@ -245,7 +251,7 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface OrderWithItems extends OrderRow {
-  order_items: Pick<OrderItemRow, 'id' | 'nombre_producto' | 'cantidad' | 'precio_unitario' | 'precio_total'>[]
+  order_items: Pick<OrderItemRow, 'id' | 'product_id' | 'nombre_producto' | 'cantidad' | 'precio_unitario' | 'precio_total' | 'unidades_stock'>[]
 }
 
 export async function getOrderByNumber(orderNumber: string): Promise<OrderWithItems | null> {
@@ -255,10 +261,12 @@ export async function getOrderByNumber(orderNumber: string): Promise<OrderWithIt
       *,
       order_items (
         id,
+        product_id,
         nombre_producto,
         cantidad,
         precio_unitario,
-        precio_total
+        precio_total,
+        unidades_stock
       )
     `)
     .eq('numero_pedido', orderNumber)
@@ -312,10 +320,12 @@ export async function getOrderByStripePaymentIntentId(
       *,
       order_items (
         id,
+        product_id,
         nombre_producto,
         cantidad,
         precio_unitario,
-        precio_total
+        precio_total,
+        unidades_stock
       )
     `)
     .eq('stripe_payment_intent_id', stripePaymentIntentId)
@@ -324,6 +334,31 @@ export async function getOrderByStripePaymentIntentId(
   if (error || !data) return null
 
   return data as unknown as OrderWithItems
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// decrementProductStock
+// Decremento atómico — llamar SOLO desde el webhook de Stripe al confirmar
+// el pago (payment_intent.succeeded), nunca al crear el PaymentIntent.
+// Usa la función Postgres decrement_product_stock (ver supabase/schema.sql),
+// que hace UPDATE ... WHERE stock >= qty de forma atómica contra race conditions.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function decrementProductStock(productId: string, qty: number): Promise<boolean> {
+  if (qty <= 0) return true
+
+  const db = createServiceClient()
+  const { data, error } = await db.rpc('decrement_product_stock', {
+    p_product_id: productId,
+    p_qty: qty,
+  })
+
+  if (error) {
+    console.error('[decrementProductStock] Error RPC:', error.message)
+    return false
+  }
+
+  return Boolean(data)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

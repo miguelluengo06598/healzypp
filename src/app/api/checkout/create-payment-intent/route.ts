@@ -61,7 +61,15 @@ async function getVerifiedItemPrice(
   db: ReturnType<typeof createServiceClient>,
   attributes: string[],
   quantity: number
-): Promise<{ unitPriceEur: number; discountEur: number; totalEur: number; title: string } | null> {
+): Promise<{
+  unitPriceEur: number
+  discountEur: number
+  totalEur: number
+  title: string
+  productId: string
+  unidadesStock: number
+  stockDisponible: number
+} | null> {
   const bundleName = attributes[0]
   const mockBundle = BUNDLES.find((b) => b.name === bundleName)
   if (!mockBundle) return null
@@ -81,7 +89,7 @@ async function getVerifiedItemPrice(
 
   const { data: productRow, error: productError } = await db
     .from("products")
-    .select("id, nombre, precio, activo")
+    .select("id, nombre, precio, activo, stock")
     .eq("id", bundleRow.product_id)
     .eq("activo", true)
     .maybeSingle()
@@ -98,6 +106,9 @@ async function getVerifiedItemPrice(
     discountEur: 0,
     totalEur: unitPriceEur * quantity,
     title: `${productRow.nombre} — ${mockBundle.name}`,
+    productId: productRow.id,
+    unidadesStock: bundleRow.cantidad * quantity,
+    stockDisponible: productRow.stock,
   }
 }
 
@@ -148,9 +159,16 @@ export async function POST(req: NextRequest) {
     quantity: number
     unitPriceEur: number
     discountEur: number
+    unidadesStock: number
   }> = []
 
   let subtotalEur = 0
+
+  // Stock necesario acumulado por producto real (UUID de Supabase), para
+  // soportar varias líneas del carrito que apunten al mismo producto con
+  // distintos tamaños de bundle.
+  const stockNeededByProduct = new Map<string, number>()
+  const stockAvailableByProduct = new Map<string, number>()
 
   for (const item of items) {
     const verified = await getVerifiedItemPrice(db, item.attributes, item.quantity)
@@ -166,8 +184,26 @@ export async function POST(req: NextRequest) {
       quantity: item.quantity,
       unitPriceEur: verified.unitPriceEur,
       discountEur: verified.discountEur,
+      unidadesStock: verified.unidadesStock,
     })
     subtotalEur += verified.totalEur
+
+    stockNeededByProduct.set(
+      verified.productId,
+      (stockNeededByProduct.get(verified.productId) ?? 0) + verified.unidadesStock
+    )
+    stockAvailableByProduct.set(verified.productId, verified.stockDisponible)
+  }
+
+  // ── Comprobación de stock (sin bloqueo) antes de crear pedido/PaymentIntent ──
+  for (const [productId, needed] of stockNeededByProduct) {
+    const available = stockAvailableByProduct.get(productId) ?? 0
+    if (available < needed) {
+      return NextResponse.json(
+        { error: "No hay stock suficiente para completar este pedido." },
+        { status: 400 }
+      )
+    }
   }
 
   // Calculate shipping (free if subtotal >= threshold)

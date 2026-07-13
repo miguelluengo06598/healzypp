@@ -108,6 +108,8 @@ export interface OrderItemRow {
   cantidad: number
   precio_unitario: number
   precio_total: number
+  /** Unidades reales de stock (botes) a descontar de products.stock — bundle.cantidad × cantidad */
+  unidades_stock: number | null
 }
 
 export interface OrderTrackingRow {

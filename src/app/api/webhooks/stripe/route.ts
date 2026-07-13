@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
-import { updateOrderPaymentStatus, getOrderByStripePaymentIntentId } from "@/lib/db/orders";
+import { updateOrderPaymentStatus, getOrderByStripePaymentIntentId, decrementProductStock } from "@/lib/db/orders";
 import { createServiceClient } from "@/lib/supabase";
 import { sendOrderNotification } from "@/lib/notifications";
 import { sendPushover } from "@/lib/notifications/pushover";
@@ -51,6 +51,34 @@ export async function POST(req: NextRequest) {
         // Notificación ntfy — buscamos la orden completa para incluir los datos del cliente
         const order = await getOrderByStripePaymentIntentId(pi.id);
         const firstItem = order?.order_items?.[0];
+
+        // ── Decremento atómico de stock — solo aquí, tras confirmarse el pago ──
+        if (order?.order_items?.length) {
+          const stockByProduct = new Map<string, number>();
+          for (const item of order.order_items) {
+            if (!item.product_id || !item.unidades_stock) continue;
+            stockByProduct.set(
+              item.product_id,
+              (stockByProduct.get(item.product_id) ?? 0) + item.unidades_stock
+            );
+          }
+          for (const [productId, qty] of stockByProduct) {
+            const decremented = await decrementProductStock(productId, qty);
+            if (!decremented) {
+              console.error(
+                `[stripe-webhook] Stock insuficiente al decrementar producto ${productId} (qty=${qty}) para el pedido ${order.numero_pedido} — venta ya cobrada, requiere revisión manual.`
+              );
+              sendPushover({
+                title: "⚠️ Posible sobreventa de stock",
+                message:
+                  `Pedido #${order.numero_pedido} ya cobrado, pero el stock del producto ${productId} ` +
+                  `no alcanzaba para descontar ${qty} unidades. Revisar inventario manualmente.`,
+                priority: 1,
+                sound: "falling",
+              }).catch((e) => console.error("[stripe-webhook] Pushover sobreventa error:", e));
+            }
+          }
+        }
         sendOrderNotification({
           orderNumber:      order?.numero_pedido ?? pi.id,
           customerName:     order?.nombre_cliente ?? "Desconocido",

@@ -10,6 +10,8 @@ export interface CheckoutOrderItem {
   quantity: number
   unitPriceEur: number
   discountEur: number
+  /** Unidades reales de stock (botes) que consume esta línea — bundle.cantidad × quantity */
+  unidadesStock: number
 }
 
 export interface CreateCheckoutOrderInput {
@@ -121,6 +123,7 @@ export async function createCheckoutOrder(
     cantidad:        item.quantity,
     precio_unitario: item.unitPriceEur,
     precio_total:    (item.unitPriceEur - item.discountEur) * item.quantity,
+    unidades_stock:  item.unidadesStock,
   }))
 
   const { error: itemsErr } = await db.from("order_items").insert(itemRows)
