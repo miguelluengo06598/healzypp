@@ -30,6 +30,7 @@ import { integralCF } from "@/styles/fonts";
 import { useProductPreview } from "./ProductPreviewContext";
 import { useAppDispatch } from "@/lib/hooks/redux";
 import { addToCart } from "@/lib/features/carts/cartsSlice";
+import { productPath } from "@/lib/site";
 import { Product } from "@/types/product.types";
 import {
   BUNDLES,
@@ -550,9 +551,7 @@ const QuickProductPreviewModal: React.FC = () => {
 
             {/* Link to full page */}
             <Link
-              href={`/shop/product/${product.id}/${product.title
-                .split(" ")
-                .join("-")}`}
+              href={productPath(product.id, product.title)}
               onClick={closePreview}
               className="text-sm text-brand font-medium hover:underline mb-5 w-fit"
             >

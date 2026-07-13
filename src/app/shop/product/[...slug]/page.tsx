@@ -7,8 +7,8 @@ import ProductSections from "@/components/product-page/ProductSections";
 import ProductPageTracker from "@/components/tracking/ProductPageTracker";
 import ProductMetaTracker from "@/components/tracking/ProductMetaTracker";
 import ProductSectionWrapper from "@/components/tracking/ProductSectionWrapper";
-import { notFound } from "next/navigation";
-import { SITE_NAME, SITE_URL, productPath } from "@/lib/site";
+import { notFound, permanentRedirect } from "next/navigation";
+import { SITE_NAME, SITE_URL, productPath, slugify } from "@/lib/site";
 import { BUNDLES } from "@/lib/bundles";
 import type { Product } from "@/types/product.types";
 
@@ -74,6 +74,17 @@ export default async function ProductPage({
 
   if (!productData?.title) {
     notFound();
+  }
+
+  // Redirect permanente a la URL canónica si el slug no coincide — evita que
+  // /shop/product/1, /shop/product/1/Lo-Que-Sea o variantes con mayúsculas/
+  // acentos indexen como contenido duplicado. permanentRedirect emite 308
+  // (Next.js no expone 301 desde server components); Google lo consolida
+  // exactamente igual que un 301.
+  const canonicalSlug = slugify(productData.title);
+  const providedSlug = slug.length === 2 ? decodeURIComponent(slug[1]) : null;
+  if (providedSlug !== canonicalSlug) {
+    permanentRedirect(productPath(productData.id, productData.title));
   }
 
   const canonicalUrl = `${SITE_URL}${productPath(productData.id, productData.title)}`;

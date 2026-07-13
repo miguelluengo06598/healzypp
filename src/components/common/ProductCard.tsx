@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import { Product } from "@/types/product.types";
 import { useAppDispatch } from "@/lib/hooks/redux";
 import { addToCart } from "@/lib/features/carts/cartsSlice";
+import { productPath } from "@/lib/site";
 import { useProductPreview } from "@/components/ProductPreviewContext";
 import {
   BUNDLES,
@@ -141,7 +142,7 @@ const ProductCard = ({ data }: ProductCardProps) => {
   /* --- image that renders inside the card --- */
   const activeImage = isHovered ? images[previewIndex] : data.srcUrl;
 
-  const productSlug = `/shop/product/${data.id}/${data.title.split(" ").join("-")}`;
+  const productSlug = productPath(data.id, data.title);
 
   return (
     <motion.div

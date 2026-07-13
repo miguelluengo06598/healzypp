@@ -33,6 +33,7 @@ import { cn } from "@/lib/utils";
 import { integralCF } from "@/styles/fonts";
 import { useAppSelector, useAppDispatch } from "@/lib/hooks/redux";
 import { RootState } from "@/lib/store";
+import { productPath } from "@/lib/site";
 import {
   CartItem,
   removeCartItem,
@@ -199,7 +200,7 @@ const CartItemRow: React.FC<{ item: CartItem }> = ({ item }) => {
       className="flex items-center gap-3 py-3"
     >
       <Link
-        href={`/shop/product/${item.id}/${item.name.split(" ").join("-")}`}
+        href={productPath(item.id, item.name)}
         className="relative shrink-0 w-14 h-14 rounded-[10px] bg-[#F0EEED] overflow-hidden"
       >
         <Image
