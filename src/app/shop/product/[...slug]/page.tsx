@@ -31,11 +31,33 @@ export async function generateMetadata({
   // Producto inexistente: la página renderiza notFound(); no hay metadata que aportar
   if (!product) return {};
 
+  const title = `${product.title} | ${SITE_NAME}`;
+  const description = productDescription(product);
+  const canonical = `${SITE_URL}${productPath(product.id, product.title)}`;
+  const image = `${SITE_URL}${product.gallery?.[0] ?? product.srcUrl}`;
+
   return {
-    title: `${product.title} | ${SITE_NAME}`,
-    description: productDescription(product),
+    title,
+    description,
     alternates: {
-      canonical: `${SITE_URL}${productPath(product.id, product.title)}`,
+      canonical,
+    },
+    openGraph: {
+      // Next.js no admite og:type "product" en su API tipada; "website" es el
+      // fallback estándar y no afecta al preview de la imagen/título.
+      type: "website",
+      siteName: SITE_NAME,
+      locale: "es_ES",
+      url: canonical,
+      title,
+      description,
+      images: [{ url: image, alt: product.title }],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+      images: [image],
     },
   };
 }
