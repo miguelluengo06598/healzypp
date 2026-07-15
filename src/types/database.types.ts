@@ -19,6 +19,7 @@ export type DeviceType = 'mobile' | 'desktop' | 'tablet' | 'unknown'
 export type OrderStatusEnum =
   | 'pendiente'
   | 'pagado'
+  | 'fallido'
   | 'procesando'
   | 'enviado'
   | 'entregado'

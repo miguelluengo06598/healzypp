@@ -61,6 +61,24 @@ export async function POST(req: NextRequest) {
         // Notificación ntfy — buscamos la orden completa para el total
         const order = await getOrderByStripePaymentIntentId(pi.id);
 
+        // ── Hito real de tracking: 'pagado' con fecha propia ──────────────
+        // Es lo que permite que el timeline de /account/orders muestre la
+        // fecha de pago como dato, no como estimación. No-fatal: si falla,
+        // el pedido ya quedó 'pagado' en orders y el resto del flujo sigue.
+        // El guard de redelivery de arriba evita insertos duplicados.
+        if (order) {
+          try {
+            const db = createServiceClient();
+            await db.from("order_tracking").insert({
+              order_id: order.id,
+              estado: "pagado",
+              descripcion: "Pago confirmado por Stripe",
+            });
+          } catch (err) {
+            console.warn("[stripe-webhook] Error al insertar order_tracking 'pagado':", err);
+          }
+        }
+
         // ── Decremento atómico de stock — solo aquí, tras confirmarse el pago ──
         if (order?.order_items?.length) {
           const stockByProduct = new Map<string, number>();

@@ -131,6 +131,19 @@ export async function createCheckoutOrder(
     console.error("[createCheckoutOrder] order_items insert error:", itemsErr.message)
   }
 
+  // 5. Hito de tracking 'pendiente' — paridad con el flujo de bundle único
+  // (createOrder en orders.ts). El webhook añade el hito 'pagado' al
+  // confirmarse el cobro. No-fatal, mismo patrón que el resto de inserts.
+  try {
+    await db.from("order_tracking").insert({
+      order_id: orderId,
+      estado: "pendiente",
+      descripcion: "Pedido creado, esperando confirmación de pago",
+    })
+  } catch (err) {
+    console.warn("[createCheckoutOrder] Error al insertar order_tracking:", err)
+  }
+
   return { success: true, orderId, orderNumber: orderNumber as string }
 }
 
