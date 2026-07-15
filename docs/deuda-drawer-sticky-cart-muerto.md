@@ -3,6 +3,12 @@
 Inventario acumulado de componentes no importados desde ninguna ruta activa,
 encontrados accidentalmente mientras se trabajaba en otras fases del audit.
 
+**Inventario completo (39 archivos, vía `knip`) en
+`docs/fase5-codigo-muerto-knip.md`** — este documento cubre los 7 hallados a
+mano antes de esa herramienta; ese cubre el resto, clasificados
+Trivial/Revisar. `MobileBottomNavigation.tsx` (abajo) ya se reconectó, no se
+borró.
+
 ## Drawer de StickySmartCart: UI muerta sin disparador
 
 Fecha: 2026-07-15 (Fase 3 rendimiento, descubierto al verificar el lazy-load de

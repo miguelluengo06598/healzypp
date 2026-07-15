@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { createBrowserClient } from '@supabase/ssr'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -10,8 +11,13 @@ if (!supabaseUrl || !supabaseAnonKey) {
   )
 }
 
-// Cliente para componentes cliente y Server Components (respeta RLS con clave anon)
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+// Cliente para componentes cliente ("use client"). Usa @supabase/ssr para
+// persistir la sesión en cookies (no localStorage) — es lo que permite que
+// el guard de /account (src/app/account/layout.tsx, @supabase/ssr en el
+// servidor) reconozca una sesión iniciada aquí. Con el createClient() plano
+// de supabase-js, la sesión vivía solo en localStorage y el guard
+// server-side nunca la veía: todo login real quedaba rebotado por /account.
+export const supabase = createBrowserClient(supabaseUrl, supabaseAnonKey)
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Cliente de servicio — solo para Server Actions y API Routes

@@ -6,6 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
+import { isCurrentUserAdmin } from '@/lib/supabase-server'
 import { analyticsRatelimit, getClientIp } from '@/lib/rate-limit'
 
 export const dynamic = 'force-dynamic'
@@ -17,6 +18,11 @@ let cache: {
 } | null = null
 
 export async function GET(req: NextRequest) {
+  // Solo admin: expone sesiones activas, productos top y funnel de conversión
+  if (!(await isCurrentUserAdmin())) {
+    return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
+  }
+
   // Rate limit: 30 peticiones por IP por minuto (Upstash Redis)
   const ip = getClientIp(req)
   const { success: allowed, remaining } = await analyticsRatelimit.limit(ip)

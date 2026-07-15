@@ -17,6 +17,7 @@ import { ProductPreviewProvider } from "@/components/ProductPreviewContext";
 import QuickProductPreviewModal from "@/components/QuickProductPreviewModal";
 import AuthModal from "@/components/auth/AuthModal";
 import AuthQueryHandler from "@/components/auth/AuthQueryHandler";
+import MobileBottomNavigation from "@/components/MobileBottomNavigation";
 
 const DEFAULT_DESCRIPTION =
   "Gominolas de vinagre de manzana veganas y sin gluten. Pago seguro con tarjeta y envío a toda España.";
@@ -70,6 +71,7 @@ export default function RootLayout({
               <QuickProductPreviewModal />
               <AuthModal />
               <AuthQueryHandler />
+              <MobileBottomNavigation />
             </ProductPreviewProvider>
           </TrackingProvider>
         </Providers>
