@@ -8,7 +8,7 @@ import Footer from "@/sections/Footer";
 import HolyLoader from "holy-loader";
 import Providers from "./providers";
 import { TrackingProvider } from "@/components/tracking/TrackingProvider";
-import CookieBanner from "@/components/ui/CookieBanner";
+import CookieBanner from "@/sections/CookieBanner";
 import MetaPixel from "@/components/tracking/MetaPixel"
 import { MetaPageViewTracker } from "@/components/tracking/MetaPageViewTracker";
 
