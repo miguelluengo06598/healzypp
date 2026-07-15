@@ -1,16 +1,16 @@
 "use client";
 
-import React, { useEffect, useMemo, useState, useCallback } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import React, { useMemo } from "react";
+import { motion } from "framer-motion";
 import {
   CheckCircle2,
   Package,
   Truck,
   Home,
-  Clock,
-  CalendarDays,
-  Zap,
+  CreditCard,
   AlertCircle,
+  XCircle,
+  RotateCcw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { integralCF } from "@/styles/fonts";
@@ -19,31 +19,50 @@ import {
   staggerContainerVariants,
   staggerItemVariants,
 } from "@/lib/animations/microinteractions";
+import type { OrderStatusEnum } from "@/types/database.types";
 
 /* ═══════════════════════════════════════════════════════════════════════════ */
 /*  TYPES                                                                      */
+/*                                                                             */
+/*  Este componente se alimenta EXCLUSIVAMENTE de datos reales del pedido      */
+/*  (orders.estado + filas de order_tracking). La versión anterior simulaba    */
+/*  el progreso por horas transcurridas desde la confirmación — mostraba       */
+/*  "Enviado"/"Entregado" sin que nada lo respaldara. Aquí una etapa solo      */
+/*  se marca completada si hay una señal real; las demás quedan pendientes,    */
+/*  sin fecha y sin promesa temporal.                                          */
 /* ═══════════════════════════════════════════════════════════════════════════ */
 
-export type TimelineStage = {
+export interface OrderTrackingEventInput {
+  estado: OrderStatusEnum;
+  descripcion: string | null;
+  numero_tracking: string | null;
+  empresa_envio: string | null;
+  fecha_creacion: string;
+}
+
+export interface OrderTimelineProps {
+  /** orders.estado real */
+  estado: OrderStatusEnum;
+  /** orders.fecha_creacion */
+  confirmedAt: string;
+  /** Fecha de pago si el pedido llegó a 'pagado' (orders.fecha_actualizacion) */
+  paidAt?: string | null;
+  /** Filas reales de order_tracking del pedido */
+  trackingEvents?: OrderTrackingEventInput[];
+  className?: string;
+}
+
+type StageStatus = "completed" | "current" | "future";
+
+interface DerivedStage {
   id: number;
   name: string;
   icon: React.ElementType;
-  hours: number;
-  message: string;
-  completedMessage: string;
-};
-
-export interface OrderTimelineProps {
-  /** When the order was confirmed */
-  orderConfirmedAt: Date | string;
-  /** Hours until "Preparado" stage (default: 18) */
-  preparationHours?: number;
-  /** Hours until "Enviado" stage (default: 42) */
-  shippingHours?: number;
-  /** Hours until "Entregado" stage (default: 66) */
-  deliveryHours?: number;
-  /** Optional CSS class */
-  className?: string;
+  status: StageStatus;
+  /** Fecha real del hito; null si la etapa no tiene señal con fecha */
+  date: string | null;
+  numeroTracking?: string | null;
+  empresaEnvio?: string | null;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════ */
@@ -55,247 +74,157 @@ const STAGE_CONFIG = {
     bg: "bg-emerald-500",
     border: "border-emerald-500",
     text: "text-emerald-600",
-    textLight: "text-emerald-500",
     icon: "text-white",
     glow: "shadow-emerald-500/30",
-    track: "bg-emerald-500",
   },
   current: {
     bg: "bg-amber-500",
     border: "border-amber-500",
     text: "text-amber-700",
-    textLight: "text-amber-500",
     icon: "text-white",
     glow: "shadow-amber-500/40",
-    track: "bg-amber-500",
   },
   future: {
     bg: "bg-gray-200",
     border: "border-gray-300",
     text: "text-gray-500",
-    textLight: "text-gray-400",
     icon: "text-gray-400",
     glow: "",
-    track: "bg-gray-200",
+  },
+};
+
+/** Rango alcanzado en la escalera según orders.estado */
+const ESTADO_RANK: Partial<Record<OrderStatusEnum, number>> = {
+  pendiente: 0,
+  pagado: 1,
+  procesando: 1,
+  enviado: 2,
+  entregado: 3,
+};
+
+/** Estados fuera de la escalera: se muestra banner de estado, no progresión */
+const TERMINAL_STATES: Partial<
+  Record<OrderStatusEnum, { title: string; message: string; icon: React.ElementType; tone: "error" | "neutral" }>
+> = {
+  fallido: {
+    title: "Pago fallido",
+    message:
+      "El pago de este pedido no se completó. Si crees que es un error, contacta con nosotros.",
+    icon: XCircle,
+    tone: "error",
+  },
+  cancelado: {
+    title: "Pedido cancelado",
+    message: "Este pedido fue cancelado.",
+    icon: XCircle,
+    tone: "neutral",
+  },
+  reembolsado: {
+    title: "Pedido reembolsado",
+    message: "El importe de este pedido ha sido reembolsado.",
+    icon: RotateCcw,
+    tone: "neutral",
   },
 };
 
 /* ═══════════════════════════════════════════════════════════════════════════ */
-/*  HOOK: useCountdown                                                         */
+/*  DERIVATION — solo señales reales, nunca reloj                              */
 /* ═══════════════════════════════════════════════════════════════════════════ */
 
-function useCountdown(targetDate: Date, active: boolean): string {
-  const [remaining, setRemaining] = useState(() =>
-    Math.max(0, targetDate.getTime() - Date.now())
-  );
+function deriveStages(
+  estado: OrderStatusEnum,
+  confirmedAt: string,
+  paidAt: string | null | undefined,
+  events: OrderTrackingEventInput[]
+): { stages: DerivedStage[]; completedRank: number } {
+  const eventByEstado = (e: OrderStatusEnum) =>
+    events.find((ev) => ev.estado === e);
 
-  useEffect(() => {
-    if (!active) return;
-
-    const tick = () => {
-      const ms = Math.max(0, targetDate.getTime() - Date.now());
-      setRemaining(ms);
-    };
-
-    tick();
-    const interval = setInterval(tick, 1000);
-    return () => clearInterval(interval);
-  }, [targetDate, active]);
-
-  const totalSeconds = Math.floor(remaining / 1000);
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-
-  if (hours > 0) {
-    return `${hours}h ${minutes}m`;
+  // Rango completado = máximo entre orders.estado y los eventos de tracking
+  let completedRank = ESTADO_RANK[estado] ?? 0;
+  for (const ev of events) {
+    const r = ESTADO_RANK[ev.estado];
+    if (r !== undefined && r > completedRank) completedRank = r;
   }
-  if (minutes > 0) {
-    return `${minutes}m ${seconds}s`;
-  }
-  return `${seconds}s`;
+
+  const shippedEvent = eventByEstado("enviado");
+  const deliveredEvent = eventByEstado("entregado");
+
+  const defs: Array<Omit<DerivedStage, "status">> = [
+    {
+      id: 0,
+      name: "Confirmado",
+      icon: CheckCircle2,
+      date: eventByEstado("pendiente")?.fecha_creacion ?? confirmedAt,
+    },
+    {
+      id: 1,
+      name: "Pagado",
+      icon: CreditCard,
+      date:
+        eventByEstado("pagado")?.fecha_creacion ??
+        (completedRank >= 1 ? paidAt ?? null : null),
+    },
+    {
+      id: 2,
+      name: "Enviado",
+      icon: Truck,
+      date: shippedEvent?.fecha_creacion ?? null,
+      numeroTracking: shippedEvent?.numero_tracking,
+      empresaEnvio: shippedEvent?.empresa_envio,
+    },
+    {
+      id: 3,
+      name: "Entregado",
+      icon: Home,
+      date: deliveredEvent?.fecha_creacion ?? null,
+    },
+  ];
+
+  const stages: DerivedStage[] = defs.map((def) => ({
+    ...def,
+    status:
+      def.id <= completedRank
+        ? "completed"
+        : def.id === completedRank + 1
+        ? "current" // "siguiente paso" — sin fecha ni promesa temporal
+        : "future",
+  }));
+
+  return { stages, completedRank };
 }
 
-/* ═══════════════════════════════════════════════════════════════════════════ */
-/*  HOOK: useOrderProgress                                                     */
-/* ═══════════════════════════════════════════════════════════════════════════ */
+function formatDate(iso: string): string {
+  const d = new Date(iso);
+  return d.toLocaleDateString("es-ES", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
 
-function useOrderProgress(
-  orderConfirmedAt: Date,
-  prepH: number,
-  shipH: number,
-  delH: number
-) {
-  const [now, setNow] = useState(() => new Date());
-
-  /* Recalculate every minute */
-  useEffect(() => {
-    const interval = setInterval(() => setNow(new Date()), 60000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const hoursPassed = useMemo(() => {
-    return (now.getTime() - orderConfirmedAt.getTime()) / (1000 * 60 * 60);
-  }, [now, orderConfirmedAt]);
-
-  const stages: TimelineStage[] = useMemo(
-    () => [
-      {
-        id: 0,
-        name: "Confirmado",
-        icon: CheckCircle2,
-        hours: 0,
-        message: "Tu pedido ha sido confirmado",
-        completedMessage: "Pedido confirmado",
-      },
-      {
-        id: 1,
-        name: "Preparado",
-        icon: Package,
-        hours: prepH,
-        message: "Tu pedido se está preparando",
-        completedMessage: "Pedido preparado",
-      },
-      {
-        id: 2,
-        name: "Enviado",
-        icon: Truck,
-        hours: shipH,
-        message: "Tu pedido está de camino",
-        completedMessage: "Pedido enviado",
-      },
-      {
-        id: 3,
-        name: "Entregado",
-        icon: Home,
-        hours: delH,
-        message: "Tu pedido ha llegado",
-        completedMessage: "Pedido entregado",
-      },
-    ],
-    [prepH, shipH, delH]
-  );
-
-  const currentStageIndex = useMemo(() => {
-    for (let i = stages.length - 1; i >= 0; i--) {
-      if (hoursPassed >= stages[i].hours) return i;
-    }
-    return 0;
-  }, [hoursPassed, stages]);
-
-  const nextStage = stages[currentStageIndex + 1];
-  const isDelivered = currentStageIndex === stages.length - 1;
-
-  /* Delivery estimate date */
-  const deliveryDate = useMemo(() => {
-    const d = new Date(orderConfirmedAt);
-    d.setHours(d.getHours() + delH);
-    return d;
-  }, [orderConfirmedAt, delH]);
-
-  /* Progress percentage (0-100) */
-  const progressPercent = useMemo(() => {
-    if (isDelivered) return 100;
-    const prev = stages[currentStageIndex];
-    const next = stages[currentStageIndex + 1];
-    if (!next) return 100;
-    const stageDuration = next.hours - prev.hours;
-    const elapsedInStage = hoursPassed - prev.hours;
-    const stageProgress = Math.min(1, Math.max(0, elapsedInStage / stageDuration));
-    const base = (currentStageIndex / (stages.length - 1)) * 100;
-    const increment = (1 / (stages.length - 1)) * stageProgress * 100;
-    return Math.round(base + increment);
-  }, [hoursPassed, currentStageIndex, stages, isDelivered]);
-
+function bannerFor(estado: OrderStatusEnum, completedRank: number) {
+  if (completedRank >= 3)
+    return { title: "¡Pedido entregado!", icon: Home, iconTone: "emerald" as const };
+  if (completedRank >= 2)
+    return { title: "Tu pedido está de camino", icon: Truck, iconTone: "amber" as const };
+  if (completedRank >= 1)
+    return { title: "Pago confirmado", icon: CreditCard, iconTone: "emerald" as const };
   return {
-    stages,
-    currentStageIndex,
-    nextStage,
-    isDelivered,
-    hoursPassed,
-    deliveryDate,
-    progressPercent,
-    now,
+    title: "Esperando confirmación de pago",
+    icon: Package,
+    iconTone: "amber" as const,
   };
 }
-
-/* ═══════════════════════════════════════════════════════════════════════════ */
-/*  HELPERS                                                                    */
-/* ═══════════════════════════════════════════════════════════════════════════ */
-
-function formatDeliveryDate(date: Date): string {
-  const today = new Date();
-  const tomorrow = new Date(today);
-  tomorrow.setDate(tomorrow.getDate() + 1);
-
-  const isToday = date.toDateString() === today.toDateString();
-  const isTomorrow = date.toDateString() === tomorrow.toDateString();
-
-  const dayName = date.toLocaleDateString("es-ES", { weekday: "long" });
-  const dayNum = date.getDate();
-  const month = date.toLocaleDateString("es-ES", { month: "long" });
-
-  let relative = "";
-  if (isToday) relative = " (hoy)";
-  else if (isTomorrow) relative = " (mañana)";
-  else {
-    const diff = Math.ceil(
-      (date.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
-    );
-    if (diff > 1) relative = ` (en ${diff} días)`;
-  }
-
-  return `${dayName} ${dayNum} de ${month}${relative}`;
-}
-
-function stageStatus(
-  stageIdx: number,
-  currentIdx: number
-): "completed" | "current" | "future" {
-  if (stageIdx < currentIdx) return "completed";
-  if (stageIdx === currentIdx) return "current";
-  return "future";
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════ */
-/*  SUB-COMPONENT: CountdownBadge                                              */
-/* ═══════════════════════════════════════════════════════════════════════════ */
-
-const CountdownBadge: React.FC<{
-  targetDate: Date;
-  active: boolean;
-  urgent?: boolean;
-}> = ({ targetDate, active, urgent }) => {
-  const countdown = useCountdown(targetDate, active);
-
-  return (
-    <AnimatePresence mode="wait">
-      <motion.span
-        key={countdown}
-        initial={{ opacity: 0, y: -4 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: 4 }}
-        transition={{ duration: 0.25 }}
-        className={cn(
-          "inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full",
-          urgent
-            ? "bg-red-50 text-red-600 border border-red-200"
-            : "bg-amber-50 text-amber-700 border border-amber-200"
-        )}
-      >
-        <Clock className="w-3 h-3" />
-        Llega en {countdown}
-      </motion.span>
-    </AnimatePresence>
-  );
-};
 
 /* ═══════════════════════════════════════════════════════════════════════════ */
 /*  SUB-COMPONENT: StageIcon                                                   */
 /* ═══════════════════════════════════════════════════════════════════════════ */
 
 const StageIcon: React.FC<{
-  status: "completed" | "current" | "future";
+  status: StageStatus;
   icon: React.ElementType;
   isLast?: boolean;
 }> = ({ status, icon: Icon, isLast }) => {
@@ -303,52 +232,28 @@ const StageIcon: React.FC<{
 
   return (
     <div className="relative flex items-center justify-center">
-      {/* Pulse ring for current */}
       {status === "current" && (
         <motion.span
-          className={cn(
-            "absolute inset-0 rounded-full",
-            styles.bg,
-            "opacity-30"
-          )}
+          className={cn("absolute inset-0 rounded-full", styles.bg, "opacity-30")}
           animate={{ scale: [1, 1.6], opacity: [0.4, 0] }}
-          transition={{
-            repeat: Infinity,
-            duration: 2,
-            ease: "easeOut",
-          }}
+          transition={{ repeat: Infinity, duration: 2, ease: "easeOut" }}
         />
       )}
 
-      <motion.div
-        initial={false}
-        animate={
-          status === "current"
-            ? { scale: [1, 1.08, 1] }
-            : { scale: 1 }
-        }
-        transition={
-          status === "current"
-            ? { repeat: Infinity, duration: 2.5, ease: "easeInOut" }
-            : undefined
-        }
+      <div
         className={cn(
           "relative w-10 h-10 sm:w-11 sm:h-11 rounded-full flex items-center justify-center border-2 transition-colors duration-500",
-          status === "completed" && `${styles.bg} ${styles.border} ${styles.glow} shadow-lg`,
-          status === "current" && `${styles.bg} ${styles.border} ${styles.glow} shadow-lg`,
+          (status === "completed" || status === "current") &&
+            `${styles.bg} ${styles.border} ${styles.glow} shadow-lg`,
           status === "future" && `${styles.bg} ${styles.border}`
         )}
       >
         <Icon
-          className={cn(
-            "w-4 h-4 sm:w-5 sm:h-5 transition-colors duration-500",
-            styles.icon
-          )}
+          className={cn("w-4 h-4 sm:w-5 sm:h-5 transition-colors duration-500", styles.icon)}
           strokeWidth={2.5}
         />
-      </motion.div>
+      </div>
 
-      {/* Small checkmark overlay for completed */}
       {status === "completed" && !isLast && (
         <motion.div
           initial={{ scale: 0, opacity: 0 }}
@@ -364,263 +269,133 @@ const StageIcon: React.FC<{
 };
 
 /* ═══════════════════════════════════════════════════════════════════════════ */
-/*  SUB-COMPONENT: HorizontalTimeline                                          */
+/*  SUB-COMPONENT: sublabel por etapa (fecha real o estado pendiente)          */
 /* ═══════════════════════════════════════════════════════════════════════════ */
 
-const HorizontalTimeline: React.FC<{
-  stages: TimelineStage[];
-  currentStageIndex: number;
-  hoursPassed: number;
-  nextStage: TimelineStage | undefined;
-  isDelivered: boolean;
-  deliveryDate: Date;
-}> = ({
-  stages,
-  currentStageIndex,
-  hoursPassed,
-  nextStage,
-  isDelivered,
-  deliveryDate,
-}) => {
-  const currentStage = stages[currentStageIndex];
+function stageSublabel(stage: DerivedStage): string {
+  if (stage.status === "completed")
+    return stage.date ? formatDate(stage.date) : "Completado";
+  if (stage.status === "current") return "Siguiente paso";
+  return "Pendiente";
+}
 
+/* ═══════════════════════════════════════════════════════════════════════════ */
+/*  SUB-COMPONENT: HorizontalTimeline (desktop)                                */
+/* ═══════════════════════════════════════════════════════════════════════════ */
+
+const HorizontalTimeline: React.FC<{ stages: DerivedStage[]; completedRank: number }> = ({
+  stages,
+  completedRank,
+}) => {
   return (
     <div className="hidden md:block">
-      {/* Timeline track */}
-      <div className="relative mb-8">
-        {/* Background track */}
+      <div className="relative">
         <div className="absolute top-5 sm:top-[22px] left-0 right-0 h-[3px] bg-gray-200 rounded-full" />
-
-        {/* Animated progress track */}
         <motion.div
-          className="absolute top-5 sm:top-[22px] left-0 h-[3px] rounded-full"
-          style={{
-            background: "linear-gradient(90deg, #10B981, #F59E0B)",
-          }}
+          className="absolute top-5 sm:top-[22px] left-0 h-[3px] rounded-full bg-emerald-500"
           initial={{ width: "0%" }}
-          animate={{ width: `${(currentStageIndex / (stages.length - 1)) * 100}%` }}
+          animate={{ width: `${(completedRank / (stages.length - 1)) * 100}%` }}
           transition={{ duration: 1.2, ease: [0.4, 0, 0.2, 1], delay: 0.3 }}
         />
 
-        {/* Stages */}
         <div className="relative flex justify-between">
-          {stages.map((stage, idx) => {
-            const status = stageStatus(idx, currentStageIndex);
-            const isLast = idx === stages.length - 1;
-
-            return (
-              <motion.div
-                key={stage.id}
-                variants={staggerItemVariants}
-                className="flex flex-col items-center gap-2"
-                style={{ width: isLast ? "auto" : undefined }}
-              >
-                <StageIcon status={status} icon={stage.icon} isLast={isLast} />
-
-                <div className="text-center space-y-0.5 mt-1">
-                  <p
-                    className={cn(
-                      "text-xs sm:text-sm font-bold transition-colors duration-500",
-                      status === "completed" && STAGE_CONFIG.completed.text,
-                      status === "current" && STAGE_CONFIG.current.text,
-                      status === "future" && STAGE_CONFIG.future.text
-                    )}
-                  >
-                    {stage.name}
+          {stages.map((stage, idx) => (
+            <motion.div
+              key={stage.id}
+              variants={staggerItemVariants}
+              className="flex flex-col items-center gap-2"
+            >
+              <StageIcon
+                status={stage.status}
+                icon={stage.icon}
+                isLast={idx === stages.length - 1}
+              />
+              <div className="text-center space-y-0.5 mt-1">
+                <p
+                  className={cn(
+                    "text-xs sm:text-sm font-bold transition-colors duration-500",
+                    STAGE_CONFIG[stage.status].text
+                  )}
+                >
+                  {stage.name}
+                </p>
+                <p className="text-[10px] sm:text-xs text-black/40 font-medium">
+                  {stageSublabel(stage)}
+                </p>
+                {stage.numeroTracking && (
+                  <p className="text-[10px] text-black/40">
+                    {stage.empresaEnvio ? `${stage.empresaEnvio} · ` : ""}
+                    {stage.numeroTracking}
                   </p>
-                  <p className="text-[10px] sm:text-xs text-black/40 font-medium">
-                    {status === "completed"
-                      ? `${stage.hours}h · Completado`
-                      : status === "current"
-                      ? `${stage.hours}h · En curso`
-                      : `${stage.hours}h · Pendiente`}
-                  </p>
-                </div>
-              </motion.div>
-            );
-          })}
+                )}
+              </div>
+            </motion.div>
+          ))}
         </div>
       </div>
-
-      {/* Contextual info */}
-      <motion.div
-        variants={staggerItemVariants}
-        className="bg-[#F7F8F5] rounded-2xl border border-black/5 p-4 sm:p-5"
-      >
-        <div className="flex items-start justify-between gap-4">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <Zap className="w-4 h-4 text-amber-500 fill-amber-500" />
-              <span className="text-sm font-bold text-black">
-                {isDelivered
-                  ? "¡Pedido entregado!"
-                  : `Etapa actual: ${currentStage.name}`}
-              </span>
-            </div>
-            <p className="text-sm text-black/60">
-              {isDelivered
-                ? currentStage.message
-                : currentStage.message}
-            </p>
-            <div className="flex items-center gap-2 pt-1">
-              <CalendarDays className="w-3.5 h-3.5 text-black/40" />
-              <span className="text-xs text-black/50">
-                Entrega estimada: {formatDeliveryDate(deliveryDate)}
-              </span>
-            </div>
-          </div>
-
-          {!isDelivered && nextStage && (
-            <div className="shrink-0">
-              <CountdownBadge
-                targetDate={new Date(
-                  Date.now() +
-                    (nextStage.hours - hoursPassed) * 60 * 60 * 1000
-                )}
-                active={true}
-                urgent={nextStage.hours - hoursPassed < 24}
-              />
-            </div>
-          )}
-
-          {isDelivered && (
-            <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={{ type: "spring", stiffness: 400, damping: 15 }}
-              className="shrink-0 w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center"
-            >
-              <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-            </motion.div>
-          )}
-        </div>
-      </motion.div>
     </div>
   );
 };
 
 /* ═══════════════════════════════════════════════════════════════════════════ */
-/*  SUB-COMPONENT: VerticalTimeline                                            */
+/*  SUB-COMPONENT: VerticalTimeline (mobile)                                   */
 /* ═══════════════════════════════════════════════════════════════════════════ */
 
-const VerticalTimeline: React.FC<{
-  stages: TimelineStage[];
-  currentStageIndex: number;
-  hoursPassed: number;
-  nextStage: TimelineStage | undefined;
-  isDelivered: boolean;
-  deliveryDate: Date;
-}> = ({
+const VerticalTimeline: React.FC<{ stages: DerivedStage[]; completedRank: number }> = ({
   stages,
-  currentStageIndex,
-  hoursPassed,
-  nextStage,
-  isDelivered,
-  deliveryDate,
+  completedRank,
 }) => {
-  const currentStage = stages[currentStageIndex];
-
   return (
     <div className="md:hidden">
       <div className="relative pl-2">
-        {/* Vertical track line */}
         <div className="absolute left-[23px] top-4 bottom-4 w-[2px] bg-gray-200 rounded-full" />
-
-        {/* Animated progress line */}
         <motion.div
-          className="absolute left-[23px] top-4 w-[2px] rounded-full"
-          style={{
-            background: "linear-gradient(180deg, #10B981, #F59E0B)",
-          }}
+          className="absolute left-[23px] top-4 w-[2px] rounded-full bg-emerald-500"
           initial={{ height: "0%" }}
-          animate={{
-            height: `${(currentStageIndex / (stages.length - 1)) * 100}%`,
-          }}
+          animate={{ height: `${(completedRank / (stages.length - 1)) * 100}%` }}
           transition={{ duration: 1.2, ease: [0.4, 0, 0.2, 1], delay: 0.3 }}
         />
 
         <div className="space-y-5">
-          {stages.map((stage, idx) => {
-            const status = stageStatus(idx, currentStageIndex);
-            const isLast = idx === stages.length - 1;
-
-            return (
-              <motion.div
-                key={stage.id}
-                variants={staggerItemVariants}
-                className="relative flex items-start gap-3"
-              >
-                <StageIcon status={status} icon={stage.icon} isLast={isLast} />
-
-                <div className="pt-1 space-y-0.5 min-w-0 flex-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <p
-                      className={cn(
-                        "text-sm font-bold transition-colors duration-500",
-                        status === "completed" && STAGE_CONFIG.completed.text,
-                        status === "current" && STAGE_CONFIG.current.text,
-                        status === "future" && STAGE_CONFIG.future.text
-                      )}
-                    >
-                      {stage.name}
-                    </p>
-                    {status === "current" && (
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 shrink-0">
-                        AHORA
-                      </span>
+          {stages.map((stage, idx) => (
+            <motion.div
+              key={stage.id}
+              variants={staggerItemVariants}
+              className="relative flex items-start gap-3"
+            >
+              <StageIcon
+                status={stage.status}
+                icon={stage.icon}
+                isLast={idx === stages.length - 1}
+              />
+              <div className="pt-1 space-y-0.5 min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-2">
+                  <p
+                    className={cn(
+                      "text-sm font-bold transition-colors duration-500",
+                      STAGE_CONFIG[stage.status].text
                     )}
-                  </div>
-
-                  <p className="text-xs text-black/50">
-                    {status === "completed"
-                      ? `${stage.hours}h · ${stage.completedMessage}`
-                      : status === "current"
-                      ? `${stage.hours}h · En curso`
-                      : `${stage.hours}h · Pendiente`}
+                  >
+                    {stage.name}
                   </p>
-
-                  {status === "current" && !isDelivered && nextStage && (
-                    <div className="pt-1">
-                      <CountdownBadge
-                        targetDate={new Date(
-                          Date.now() +
-                            (nextStage.hours - hoursPassed) * 60 * 60 * 1000
-                        )}
-                        active={true}
-                        urgent={nextStage.hours - hoursPassed < 24}
-                      />
-                    </div>
+                  {stage.status === "current" && (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 shrink-0">
+                      SIGUIENTE
+                    </span>
                   )}
                 </div>
-              </motion.div>
-            );
-          })}
+                <p className="text-xs text-black/50">{stageSublabel(stage)}</p>
+                {stage.numeroTracking && (
+                  <p className="text-xs text-black/40">
+                    {stage.empresaEnvio ? `${stage.empresaEnvio} · ` : ""}
+                    {stage.numeroTracking}
+                  </p>
+                )}
+              </div>
+            </motion.div>
+          ))}
         </div>
       </div>
-
-      {/* Contextual info card */}
-      <motion.div
-        variants={staggerItemVariants}
-        className="mt-6 bg-[#F7F8F5] rounded-2xl border border-black/5 p-4"
-      >
-        <div className="flex items-center gap-2 mb-1">
-          <Zap className="w-4 h-4 text-amber-500 fill-amber-500" />
-          <span className="text-sm font-bold text-black">
-            {isDelivered
-              ? "¡Pedido entregado!"
-              : `Etapa actual: ${currentStage.name}`}
-          </span>
-        </div>
-        <p className="text-sm text-black/60 mb-2">
-          {currentStage.message}
-        </p>
-        <div className="flex items-center gap-2">
-          <CalendarDays className="w-3.5 h-3.5 text-black/40" />
-          <span className="text-xs text-black/50">
-            Entrega estimada: {formatDeliveryDate(deliveryDate)}
-          </span>
-        </div>
-      </motion.div>
     </div>
   );
 };
@@ -630,41 +405,70 @@ const VerticalTimeline: React.FC<{
 /* ═══════════════════════════════════════════════════════════════════════════ */
 
 const OrderTimeline: React.FC<OrderTimelineProps> = ({
-  orderConfirmedAt,
-  preparationHours = 18,
-  shippingHours = 42,
-  deliveryHours = 66,
+  estado,
+  confirmedAt,
+  paidAt = null,
+  trackingEvents = [],
   className,
 }) => {
-  const confirmedDate = useMemo(
-    () =>
-      typeof orderConfirmedAt === "string"
-        ? new Date(orderConfirmedAt)
-        : orderConfirmedAt,
-    [orderConfirmedAt]
+  const terminal = TERMINAL_STATES[estado];
+
+  const { stages, completedRank } = useMemo(
+    () => deriveStages(estado, confirmedAt, paidAt, trackingEvents),
+    [estado, confirmedAt, paidAt, trackingEvents]
   );
 
-  const {
-    stages,
-    currentStageIndex,
-    nextStage,
-    isDelivered,
-    hoursPassed,
-    deliveryDate,
-    progressPercent,
-  } = useOrderProgress(
-    confirmedDate,
-    preparationHours,
-    shippingHours,
-    deliveryHours
-  );
+  /* Fecha del último hito real (para "Última actualización") */
+  const lastRealUpdate = useMemo(() => {
+    const dates = stages
+      .filter((s) => s.status === "completed" && s.date)
+      .map((s) => s.date as string);
+    if (dates.length === 0) return confirmedAt;
+    return dates.sort().at(-1) as string;
+  }, [stages, confirmedAt]);
 
-  const currentStage = stages[currentStageIndex];
+  /* ── Estados terminales fuera de la escalera: banner, no progresión ── */
+  if (terminal) {
+    const TIcon = terminal.icon;
+    return (
+      <motion.div
+        className={cn(
+          "w-full rounded-[20px] border p-5 flex items-start gap-4",
+          terminal.tone === "error"
+            ? "bg-red-50 border-red-200"
+            : "bg-gray-50 border-black/10",
+          className
+        )}
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={springConfigs.soft}
+      >
+        <div
+          className={cn(
+            "w-10 h-10 rounded-full flex items-center justify-center shrink-0",
+            terminal.tone === "error" ? "bg-red-100" : "bg-gray-200"
+          )}
+        >
+          <TIcon
+            className={cn(
+              "w-5 h-5",
+              terminal.tone === "error" ? "text-red-500" : "text-gray-500"
+            )}
+          />
+        </div>
+        <div>
+          <p className="text-sm font-bold text-black">{terminal.title}</p>
+          <p className="text-sm text-black/60 mt-0.5">{terminal.message}</p>
+          <p className="text-xs text-black/40 mt-1.5">
+            Pedido creado: {formatDate(confirmedAt)}
+          </p>
+        </div>
+      </motion.div>
+    );
+  }
 
-  /* Live progress bar for top banner */
-  const bannerColor = isDelivered
-    ? "bg-emerald-500"
-    : "bg-gradient-to-r from-emerald-500 to-amber-500";
+  const banner = bannerFor(estado, completedRank);
+  const BannerIcon = banner.icon;
 
   return (
     <motion.div
@@ -676,7 +480,7 @@ const OrderTimeline: React.FC<OrderTimelineProps> = ({
       animate={{ opacity: 1, y: 0 }}
       transition={springConfigs.soft}
     >
-      {/* ── Top banner with animated progress ── */}
+      {/* ── Top banner ── */}
       <div className="relative overflow-hidden">
         <div className="bg-[#F7F8F5] px-5 sm:px-6 py-4 sm:py-5">
           <div className="flex items-start justify-between gap-3">
@@ -690,9 +494,7 @@ const OrderTimeline: React.FC<OrderTimelineProps> = ({
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.15, ...springConfigs.soft }}
               >
-                {isDelivered
-                  ? "¡Pedido entregado!"
-                  : "Tu pedido está de camino"}
+                {banner.title}
               </motion.h3>
               <motion.p
                 className="text-sm text-black/50"
@@ -700,47 +502,44 @@ const OrderTimeline: React.FC<OrderTimelineProps> = ({
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.25, ...springConfigs.soft }}
               >
-                Entrega estimada:{" "}
+                Última actualización:{" "}
                 <span className="font-semibold text-black/70">
-                  {formatDeliveryDate(deliveryDate)}
+                  {formatDate(lastRealUpdate)}
                 </span>
               </motion.p>
             </div>
 
-            {!isDelivered && (
-              <motion.div
-                className="shrink-0"
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.35, ...springConfigs.bouncy }}
+            <motion.div
+              className="shrink-0"
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.35, ...springConfigs.bouncy }}
+            >
+              <div
+                className={cn(
+                  "w-10 h-10 sm:w-12 sm:h-12 rounded-full border flex items-center justify-center",
+                  banner.iconTone === "emerald"
+                    ? "bg-emerald-50 border-emerald-200"
+                    : "bg-amber-50 border-amber-200"
+                )}
               >
-                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-amber-50 border border-amber-200 flex items-center justify-center">
-                  <Truck className="w-5 h-5 sm:w-6 sm:h-6 text-amber-500" />
-                </div>
-              </motion.div>
-            )}
-
-            {isDelivered && (
-              <motion.div
-                className="shrink-0"
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.35, ...springConfigs.bouncy }}
-              >
-                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-emerald-50 border border-emerald-200 flex items-center justify-center">
-                  <Home className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-500" />
-                </div>
-              </motion.div>
-            )}
+                <BannerIcon
+                  className={cn(
+                    "w-5 h-5 sm:w-6 sm:h-6",
+                    banner.iconTone === "emerald" ? "text-emerald-500" : "text-amber-500"
+                  )}
+                />
+              </div>
+            </motion.div>
           </div>
         </div>
 
-        {/* Progress bar */}
+        {/* Progress bar — fracción de hitos reales completados, no tiempo */}
         <div className="h-1 bg-gray-100">
           <motion.div
-            className={cn("h-full rounded-r-full", bannerColor)}
+            className="h-full rounded-r-full bg-emerald-500"
             initial={{ width: "0%" }}
-            animate={{ width: `${progressPercent}%` }}
+            animate={{ width: `${(completedRank / (stages.length - 1)) * 100}%` }}
             transition={{ duration: 1.5, ease: [0.4, 0, 0.2, 1], delay: 0.2 }}
           />
         </div>
@@ -753,39 +552,18 @@ const OrderTimeline: React.FC<OrderTimelineProps> = ({
         initial="hidden"
         animate="visible"
       >
-        {/* Horizontal timeline (desktop) */}
-        <HorizontalTimeline
-          stages={stages}
-          currentStageIndex={currentStageIndex}
-          hoursPassed={hoursPassed}
-          nextStage={nextStage}
-          isDelivered={isDelivered}
-          deliveryDate={deliveryDate}
-        />
+        <HorizontalTimeline stages={stages} completedRank={completedRank} />
+        <VerticalTimeline stages={stages} completedRank={completedRank} />
 
-        {/* Vertical timeline (mobile) */}
-        <VerticalTimeline
-          stages={stages}
-          currentStageIndex={currentStageIndex}
-          hoursPassed={hoursPassed}
-          nextStage={nextStage}
-          isDelivered={isDelivered}
-          deliveryDate={deliveryDate}
-        />
-
-        {/* ── Footer status ── */}
+        {/* ── Footer ── */}
         <motion.div
           variants={staggerItemVariants}
           className="mt-5 pt-4 border-t border-black/5 flex items-center gap-2 text-xs text-black/40"
         >
           <AlertCircle className="w-3.5 h-3.5 shrink-0" />
           <span>
-            {isDelivered
-              ? "Entregado correctamente. ¿Necesitas ayuda? Contacta con nosotros."
-              : `El tiempo de entrega es estimado. Última actualización: ${new Date().toLocaleTimeString(
-                  "es-ES",
-                  { hour: "2-digit", minute: "2-digit" }
-                )}`}
+            Estados basados en la información real de tu pedido. ¿Dudas?
+            Contacta con nosotros indicando tu número de pedido.
           </span>
         </motion.div>
       </motion.div>
