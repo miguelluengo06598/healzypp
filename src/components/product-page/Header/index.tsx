@@ -1,5 +1,5 @@
 import React from "react";
-import PhotoSection from "./PhotoSection";
+import PhotoSection from "@/sections/PhotoSection";
 import { Product } from "@/types/product.types";
 import { integralCF } from "@/styles/fonts";
 import { cn } from "@/lib/utils";
@@ -7,7 +7,7 @@ import Rating from "@/components/ui/Rating";
 import { FaCheck } from "react-icons/fa";
 // Cambio: ColorSelection y SizeSelection reemplazados por BundleSelection
 import BundleSelection from "./BundleSelection";
-import DeliveryTimeline from "./DeliveryTimeline";
+import DeliveryTimeline from "@/sections/DeliveryTimeline";
 import CheckoutActions from "./CheckoutActions";
 
 const BENEFIT_BUBBLES = [

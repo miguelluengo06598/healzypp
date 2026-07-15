@@ -1,6 +1,6 @@
 "use client";
 
-import BreadcrumbCart from "@/components/cart-page/BreadcrumbCart";
+import BreadcrumbCart from "@/sections/Breadcrumbs/BreadcrumbCart";
 import ProductCard from "@/components/cart-page/ProductCard";
 import { Button } from "@/components/ui/button";
 import InputGroup from "@/components/ui/input-group";

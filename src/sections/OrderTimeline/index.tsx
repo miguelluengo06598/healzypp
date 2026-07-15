@@ -18,7 +18,7 @@ import {
   springConfigs,
   staggerContainerVariants,
   staggerItemVariants,
-} from "@/lib/animations/microinteractions";
+} from "./microinteractions";
 import type { OrderStatusEnum } from "@/types/database.types";
 
 /* ═══════════════════════════════════════════════════════════════════════════ */

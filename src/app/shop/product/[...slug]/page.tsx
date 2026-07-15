@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { newArrivalsData, relatedProductData } from "@/data/products";
 import ProductListSec from "@/components/common/ProductListSec";
-import BreadcrumbProduct from "@/components/product-page/BreadcrumbProduct";
+import BreadcrumbProduct from "@/sections/Breadcrumbs/BreadcrumbProduct";
 import Header from "@/components/product-page/Header";
 import ProductSections from "@/components/product-page/ProductSections";
 import ProductPageTracker from "@/components/tracking/ProductPageTracker";

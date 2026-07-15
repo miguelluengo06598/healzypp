@@ -1,7 +1,7 @@
 import Image from "next/image";
 import { cn } from "@/lib/utils";
 import { integralCF } from "@/styles/fonts";
-import CustomerReviews from "./CustomerReviews";
+import CustomerReviews from "@/sections/CustomerReviews";
 import ProductSectionWrapper from "@/components/tracking/ProductSectionWrapper";
 
 // ─────────────────────────────────────────────────────────────────────────────
