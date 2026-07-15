@@ -45,8 +45,9 @@ export default function ShopPage() {
           {/* Solo productos REALES con página funcional */}
           {realProducts.length > 0 ? (
             <div className="w-full grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-4 lg:gap-5">
-              {realProducts.map((product) => (
-                <ProductCard key={product.id} data={product} />
+              {realProducts.map((product, index) => (
+                // Solo la primera fila (4 cols en xl) es candidata a LCP
+                <ProductCard key={product.id} data={product} imagePriority={index < 4} />
               ))}
             </div>
           ) : (

@@ -29,6 +29,8 @@ import {
 
 type ProductCardProps = {
   data: Product;
+  /** Solo las primeras tarjetas visibles del listado (candidatas a LCP) deben precargarse. */
+  imagePriority?: boolean;
 };
 
 type StockStatus = {
@@ -65,7 +67,7 @@ const SPRING_BOUNCE = {
 /*  COMPONENT                                                          */
 /* ------------------------------------------------------------------ */
 
-const ProductCard = ({ data }: ProductCardProps) => {
+const ProductCard = ({ data, imagePriority = false }: ProductCardProps) => {
   const dispatch = useAppDispatch();
   const { openPreview } = useProductPreview();
 
@@ -184,7 +186,7 @@ const ProductCard = ({ data }: ProductCardProps) => {
                 width={400}
                 height={400}
                 className="w-full h-full object-contain p-4 sm:p-6 transition-transform duration-500 group-hover:scale-105"
-                priority
+                priority={imagePriority}
               />
             </motion.div>
           </AnimatePresence>
