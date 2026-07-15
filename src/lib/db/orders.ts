@@ -4,7 +4,7 @@
 // y deben llamarse solo desde Server Actions o API Routes.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { createServiceClient, supabase } from '@/lib/supabase'
+import { createServiceClient } from '@/lib/supabase'
 import { BUNDLES } from '@/lib/bundles'
 import type {
   OrderRow,
@@ -272,36 +272,8 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// getOrderByNumber
-// Lectura pública del pedido + ítems (para página de confirmación)
-// ─────────────────────────────────────────────────────────────────────────────
-
 export interface OrderWithItems extends OrderRow {
   order_items: Pick<OrderItemRow, 'id' | 'product_id' | 'nombre_producto' | 'cantidad' | 'precio_unitario' | 'precio_total' | 'unidades_stock'>[]
-}
-
-export async function getOrderByNumber(orderNumber: string): Promise<OrderWithItems | null> {
-  const { data, error } = await supabase
-    .from('orders')
-    .select(`
-      *,
-      order_items (
-        id,
-        product_id,
-        nombre_producto,
-        cantidad,
-        precio_unitario,
-        precio_total,
-        unidades_stock
-      )
-    `)
-    .eq('numero_pedido', orderNumber)
-    .single()
-
-  if (error || !data) return null
-
-  return data as unknown as OrderWithItems
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
