@@ -30,6 +30,7 @@ import { integralCF } from "@/styles/fonts";
 import { useProductPreview } from "./ProductPreviewContext";
 import { useAppDispatch } from "@/lib/hooks/redux";
 import { addToCart } from "@/lib/features/carts/cartsSlice";
+import { productPath } from "@/lib/site";
 import { Product } from "@/types/product.types";
 import {
   BUNDLES,
@@ -334,25 +335,27 @@ const QuickProductPreviewModal: React.FC = () => {
               {product.title}
             </h2>
 
-            {/* Rating */}
-            <div className="flex items-center gap-2 mb-4">
-              <Rating
-                initialValue={product.rating}
-                allowFraction
-                SVGclassName="inline-block"
-                emptyClassName="fill-gray-50"
-                size={20}
-                readonly
-              />
-              <span className="text-sm font-medium text-black">
-                {product.rating.toFixed(1)}
-              </span>
-              {product.reviewsCount != null && (
-                <span className="text-xs text-black/40">
-                  ({product.reviewsCount} reseñas)
+            {/* Rating — solo con datos reales (sin placeholder) */}
+            {product.rating != null && (
+              <div className="flex items-center gap-2 mb-4">
+                <Rating
+                  initialValue={product.rating}
+                  allowFraction
+                  SVGclassName="inline-block"
+                  emptyClassName="fill-gray-50"
+                  size={20}
+                  readonly
+                />
+                <span className="text-sm font-medium text-black">
+                  {product.rating.toFixed(1)}
                 </span>
-              )}
-            </div>
+                {product.reviewsCount != null && (
+                  <span className="text-xs text-black/40">
+                    ({product.reviewsCount} reseñas)
+                  </span>
+                )}
+              </div>
+            )}
 
             {/* Benefits */}
             <div className="flex flex-wrap gap-2 mb-5">
@@ -550,9 +553,7 @@ const QuickProductPreviewModal: React.FC = () => {
 
             {/* Link to full page */}
             <Link
-              href={`/shop/product/${product.id}/${product.title
-                .split(" ")
-                .join("-")}`}
+              href={productPath(product.id, product.title)}
               onClick={closePreview}
               className="text-sm text-brand font-medium hover:underline mb-5 w-fit"
             >

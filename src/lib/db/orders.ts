@@ -55,59 +55,111 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
   }
 
   try {
-  // ── 1. Obtener bundle ────────────────────────────────────────────────────
-  let bundle: {
-    id: number
-    name: string
-    price: number
-    product_id: number | null
-    cantidad: number
-  } | null = null
+  // ── 1-3. Ramas independientes en paralelo ────────────────────────────────
+  // Tres ramas sin dependencias entre sí: (a) bundle → producto (el producto
+  // SÍ depende de bundle.product_id, por eso va encadenado dentro de la misma
+  // rama), (b) upsert de perfil (solo depende del input) y (c) el número de
+  // pedido (sin inputs; ya se ejecutaba incondicionalmente en la versión
+  // secuencial, así que paralelizar no cambia cuándo se consume un número).
+  // Cada rama conserva su manejo de errores: bundle/producto/perfil degradan
+  // con warn sin abortar, exactamente igual que antes.
 
-  try {
-    const { data: bundleRaw, error: bundleError } = await db
-      .from('bundles')
-      .select('id, product_id, nombre, cantidad, precio, precio_original, ahorro, porcentaje_dto, precio_por_unidad, es_popular, orden, activo')
-      .eq('id', input.bundleId)
-      .eq('activo', true)
-      .single()
+  const readBundleAndProduct = async (): Promise<{
+    bundle: {
+      id: number
+      name: string
+      price: number
+      product_id: number | null
+      cantidad: number
+    } | null
+    product: { id: number; title: string } | null
+  }> => {
+    let bundle: {
+      id: number
+      name: string
+      price: number
+      product_id: number | null
+      cantidad: number
+    } | null = null
 
-    if (!bundleError && bundleRaw) {
-      const raw = bundleRaw as any
-      bundle = {
-        id: raw.id,
-        name: raw.nombre ?? 'Bundle',
-        price: Number(raw.precio ?? 0),
-        product_id: raw.product_id ?? null,
-        cantidad: Number(raw.cantidad ?? input.bundleId),
-      }
-    } else if (bundleError) {
-      console.warn('[createOrder] No se pudo leer bundle:', bundleError.message)
-    }
-  } catch (err) {
-    console.warn('[createOrder] No se pudo leer bundle:', err)
-  }
-
-  // Intentar leer el producto asociado de forma aislada (la tabla puede tener columnas distintas)
-  let product: { id: number; title: string } | null = null
-  if (bundle?.product_id) {
     try {
-      const { data: productRaw, error: productError } = await db
-        .from('products')
-        .select('id, nombre')
-        .eq('id', bundle.product_id)
+      const { data: bundleRaw, error: bundleError } = await db
+        .from('bundles')
+        .select('id, product_id, nombre, cantidad, precio, precio_original, ahorro, porcentaje_dto, precio_por_unidad, es_popular, orden, activo')
+        .eq('id', input.bundleId)
+        .eq('activo', true)
         .single()
-      if (!productError && productRaw) {
-        const raw = productRaw as any
-        product = {
+
+      if (!bundleError && bundleRaw) {
+        const raw = bundleRaw as any
+        bundle = {
           id: raw.id,
-          title: raw.nombre ?? 'Gominolas de vinagre de manzana',
+          name: raw.nombre ?? 'Bundle',
+          price: Number(raw.precio ?? 0),
+          product_id: raw.product_id ?? null,
+          cantidad: Number(raw.cantidad ?? input.bundleId),
         }
+      } else if (bundleError) {
+        console.warn('[createOrder] No se pudo leer bundle:', bundleError.message)
       }
     } catch (err) {
-      console.warn('[createOrder] No se pudo leer producto:', err)
+      console.warn('[createOrder] No se pudo leer bundle:', err)
+    }
+
+    // Intentar leer el producto asociado de forma aislada (la tabla puede tener columnas distintas)
+    let product: { id: number; title: string } | null = null
+    if (bundle?.product_id) {
+      try {
+        const { data: productRaw, error: productError } = await db
+          .from('products')
+          .select('id, nombre')
+          .eq('id', bundle.product_id)
+          .single()
+        if (!productError && productRaw) {
+          const raw = productRaw as any
+          product = {
+            id: raw.id,
+            title: raw.nombre ?? 'Gominolas de vinagre de manzana',
+          }
+        }
+      } catch (err) {
+        console.warn('[createOrder] No se pudo leer producto:', err)
+      }
+    }
+
+    return { bundle, product }
+  }
+
+  const upsertProfile = async (): Promise<string | null> => {
+    // Upsert en profiles solo si el usuario está autenticado
+    if (!input.userId) return null
+    try {
+      const nameParts = input.customerData.fullName.trim().split(/\s+/)
+      const nombre    = nameParts[0] ?? ''
+      const apellidos = nameParts.slice(1).join(' ') || null
+
+      await db
+        .from('profiles')
+        .upsert({
+          id: input.userId,
+          nombre,
+          ...(apellidos ? { apellidos } : {}),
+          telefono: input.customerData.phone,
+          email: input.customerData.email ?? null,
+        }, { onConflict: 'id' })
+      return input.userId
+    } catch (err) {
+      console.warn('[createOrder] Error en profiles upsert:', err)
+      return null
     }
   }
+
+  const [{ bundle, product }, profileId, { data: orderNumber, error: numberError }] =
+    await Promise.all([
+      readBundleAndProduct(),
+      upsertProfile(),
+      db.rpc('generate_order_number'),
+    ])
 
   // Si Supabase no respondió, usar datos locales o el precio que envió el cliente
   let unitPriceEur: number
@@ -128,34 +180,6 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
     bundleName = localBundle?.name ?? 'Bundle desconocido'
     unidadesStock = localBundle?.id ?? input.bundleId
   }
-
-  // ── 2. Upsert perfil en profiles solo si el usuario está autenticado ─
-  let profileId: string | null = input.userId ?? null
-
-  if (input.userId) {
-    try {
-      const nameParts = input.customerData.fullName.trim().split(/\s+/)
-      const nombre    = nameParts[0] ?? ''
-      const apellidos = nameParts.slice(1).join(' ') || null
-
-      await db
-        .from('profiles')
-        .upsert({
-          id: input.userId,
-          nombre,
-          ...(apellidos ? { apellidos } : {}),
-          telefono: input.customerData.phone,
-          email: input.customerData.email ?? null,
-        }, { onConflict: 'id' })
-    } catch (err) {
-      console.warn('[createOrder] Error en profiles upsert:', err)
-      profileId = null
-    }
-  }
-
-  // ── 3. Generar número de pedido ──────────────────────────────────────────
-  const { data: orderNumber, error: numberError } = await db
-    .rpc('generate_order_number')
 
   if (numberError || !orderNumber) {
     console.error('[createOrder] Error en generate_order_number:', numberError)

@@ -13,6 +13,7 @@ import {
   removeCartItem,
 } from "@/lib/features/carts/cartsSlice";
 import { useAppDispatch } from "@/lib/hooks/redux";
+import { productPath } from "@/lib/site";
 
 type ProductCardProps = {
   data: CartItem;
@@ -24,7 +25,7 @@ const ProductCard = ({ data }: ProductCardProps) => {
   return (
     <div className="flex items-start space-x-4">
       <Link
-        href={`/shop/product/${data.id}/${data.name.split(" ").join("-")}`}
+        href={productPath(data.id, data.name)}
         className="bg-[#F0EEED] rounded-lg w-full min-w-[100px] max-w-[100px] sm:max-w-[124px] aspect-square overflow-hidden"
       >
         <Image
@@ -34,13 +35,12 @@ const ProductCard = ({ data }: ProductCardProps) => {
           style={{ width: "100%", height: "100%" }}
           className="rounded-md object-cover hover:scale-110 transition-all duration-500"
           alt={data.name}
-          priority
         />
       </Link>
       <div className="flex w-full self-stretch flex-col">
         <div className="flex items-center justify-between">
           <Link
-            href={`/shop/product/${data.id}/${data.name.split(" ").join("-")}`}
+            href={productPath(data.id, data.name)}
             className="text-black font-bold text-base xl:text-xl"
           >
             {data.name}

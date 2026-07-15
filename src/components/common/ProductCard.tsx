@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import { Product } from "@/types/product.types";
 import { useAppDispatch } from "@/lib/hooks/redux";
 import { addToCart } from "@/lib/features/carts/cartsSlice";
+import { productPath } from "@/lib/site";
 import { useProductPreview } from "@/components/ProductPreviewContext";
 import {
   BUNDLES,
@@ -28,6 +29,8 @@ import {
 
 type ProductCardProps = {
   data: Product;
+  /** Solo las primeras tarjetas visibles del listado (candidatas a LCP) deben precargarse. */
+  imagePriority?: boolean;
 };
 
 type StockStatus = {
@@ -64,7 +67,7 @@ const SPRING_BOUNCE = {
 /*  COMPONENT                                                          */
 /* ------------------------------------------------------------------ */
 
-const ProductCard = ({ data }: ProductCardProps) => {
+const ProductCard = ({ data, imagePriority = false }: ProductCardProps) => {
   const dispatch = useAppDispatch();
   const { openPreview } = useProductPreview();
 
@@ -141,7 +144,7 @@ const ProductCard = ({ data }: ProductCardProps) => {
   /* --- image that renders inside the card --- */
   const activeImage = isHovered ? images[previewIndex] : data.srcUrl;
 
-  const productSlug = `/shop/product/${data.id}/${data.title.split(" ").join("-")}`;
+  const productSlug = productPath(data.id, data.title);
 
   return (
     <motion.div
@@ -183,7 +186,7 @@ const ProductCard = ({ data }: ProductCardProps) => {
                 width={400}
                 height={400}
                 className="w-full h-full object-contain p-4 sm:p-6 transition-transform duration-500 group-hover:scale-105"
-                priority
+                priority={imagePriority}
               />
             </motion.div>
           </AnimatePresence>
@@ -285,21 +288,23 @@ const ProductCard = ({ data }: ProductCardProps) => {
           </h3>
         </Link>
 
-        {/* ---------- Social proof ---------- */}
+        {/* ---------- Social proof — solo con datos reales (sin placeholder) ---------- */}
         <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex items-end">
-            <Rating
-              initialValue={data.rating}
-              allowFraction
-              SVGclassName="inline-block"
-              emptyClassName="fill-gray-50"
-              size={16}
-              readonly
-            />
-            <span className="text-black text-xs ml-1.5 font-medium">
-              {data.rating.toFixed(1)}
-            </span>
-          </div>
+          {data.rating != null && (
+            <div className="flex items-end">
+              <Rating
+                initialValue={data.rating}
+                allowFraction
+                SVGclassName="inline-block"
+                emptyClassName="fill-gray-50"
+                size={16}
+                readonly
+              />
+              <span className="text-black text-xs ml-1.5 font-medium">
+                {data.rating.toFixed(1)}
+              </span>
+            </div>
+          )}
 
           {data.reviewsCount != null && (
             <span className="text-[11px] text-black/40">
