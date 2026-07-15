@@ -3,17 +3,14 @@
 // Requiere variable de entorno NTFY_TOPIC
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Contenido deliberadamente mínimo: ntfy.sh solo está protegido por el
+// secreto del nombre del topic (sin token de acceso), así que no debe llevar
+// PII en texto plano (nombre, teléfono, dirección). paymentIntentId no es PII
+// — es la clave de búsqueda real hoy en el dashboard de Stripe, a falta de
+// panel admin propio en la app al que enlazar.
 export interface OrderNotificationData {
   orderNumber: string
-  customerName: string
-  customerPhone?: string
-  customerEmail?: string
-  address?: string
-  city?: string
-  province?: string
-  bundleName?: string
   totalEuros: number
-  paymentMethod?: 'CARD'
   status: 'new' | 'confirmed' | 'failed'
   failureReason?: string
   paymentIntentId?: string
@@ -35,15 +32,7 @@ export async function sendOrderNotification(data: OrderNotificationData): Promis
 
   const lines = [
     `Pedido: ${data.orderNumber}`,
-    `Cliente: ${data.customerName}`,
-    data.customerPhone && `Teléfono: ${data.customerPhone}`,
-    data.customerEmail && `Email: ${data.customerEmail}`,
-    data.address && `Dirección: ${data.address}`,
-    data.city && `Ciudad: ${data.city}`,
-    data.province && `Provincia: ${data.province}`,
-    data.bundleName && `Producto: ${data.bundleName}`,
     `Total: ${data.totalEuros.toFixed(2)} €`,
-    data.paymentMethod && `Método: Tarjeta`,
     data.paymentIntentId && `Stripe PI: ${data.paymentIntentId}`,
     data.failureReason && `Motivo: ${data.failureReason}`,
   ].filter(Boolean) as string[]

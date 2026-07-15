@@ -58,9 +58,8 @@ export async function POST(req: NextRequest) {
         await updateOrderPaymentStatus(pi.id, "PAID");
         console.log("[stripe-webhook] Pago confirmado:", pi.id);
 
-        // Notificación ntfy — buscamos la orden completa para incluir los datos del cliente
+        // Notificación ntfy — buscamos la orden completa para el total
         const order = await getOrderByStripePaymentIntentId(pi.id);
-        const firstItem = order?.order_items?.[0];
 
         // ── Decremento atómico de stock — solo aquí, tras confirmarse el pago ──
         if (order?.order_items?.length) {
@@ -91,12 +90,7 @@ export async function POST(req: NextRequest) {
         }
         sendOrderNotification({
           orderNumber:      order?.numero_pedido ?? pi.id,
-          customerName:     order?.nombre_cliente ?? "Desconocido",
-          customerPhone:    order?.telefono_cliente ?? undefined,
-          address:          order?.direccion_envio,
-          bundleName:       firstItem?.nombre_producto ?? pi.metadata?.bundleName ?? undefined,
           totalEuros:       order ? Number(order.total) : pi.amount / 100,
-          paymentMethod:    "CARD",
           status:           "confirmed",
           paymentIntentId:  pi.id,
         }).catch((e) => console.error("[stripe-webhook] ntfy CONFIRMED error:", e));
@@ -161,10 +155,7 @@ export async function POST(req: NextRequest) {
           "Motivo desconocido";
         sendOrderNotification({
           orderNumber:     order?.numero_pedido ?? pi.id,
-          customerName:    order?.nombre_cliente ?? "Desconocido",
-          bundleName:      order?.order_items?.[0]?.nombre_producto ?? pi.metadata?.bundleName ?? undefined,
           totalEuros:      order ? Number(order.total) : pi.amount / 100,
-          paymentMethod:   "CARD",
           status:          "failed",
           paymentIntentId: pi.id,
           failureReason,
