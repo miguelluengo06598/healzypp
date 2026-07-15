@@ -7,7 +7,15 @@ import { cn } from "@/lib/utils";
 import { Product } from "@/types/product.types";
 import { getStoredBundle, type Bundle } from "@/components/checkout/OrderSummary";
 import { useMetaPixel } from "@/hooks/useMetaPixel";
-import CheckoutModal from "@/components/checkout/CheckoutModal";
+import dynamic from "next/dynamic";
+
+// Lazy-load: mismo patrón que StickySmartCart — el chunk de CheckoutModal
+// (Stripe.js, react-hook-form) no se descarga hasta que el usuario pulsa
+// "Pagar con Tarjeta".
+const CheckoutModal = dynamic(
+  () => import("@/components/checkout/CheckoutModal"),
+  { ssr: false }
+);
 
 interface CheckoutActionsProps {
   data: Product;
@@ -16,6 +24,7 @@ interface CheckoutActionsProps {
 const CheckoutActions: React.FC<CheckoutActionsProps> = ({ data }) => {
   const [bundle, setBundle] = useState<Bundle | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [modalMounted, setModalMounted] = useState(false);
   const { trackAddToCart, trackInitiateCheckout } = useMetaPixel();
 
   useEffect(() => {
@@ -34,6 +43,7 @@ const CheckoutActions: React.FC<CheckoutActionsProps> = ({ data }) => {
   const openModal = () => {
     const b = getStoredBundle();
     setBundle(b);
+    setModalMounted(true);
     setModalOpen(true);
     trackAddToCart({ id: data.id, name: data.title, price: b.priceInCents / 100 });
     trackInitiateCheckout({
@@ -82,11 +92,13 @@ const CheckoutActions: React.FC<CheckoutActionsProps> = ({ data }) => {
         </motion.button>
       </div>
 
-      {/* Modal */}
-      <CheckoutModal
-        open={modalOpen}
-        onOpenChange={setModalOpen}
-      />
+      {/* Modal — montado solo tras el primer clic (ver comentario del dynamic) */}
+      {modalMounted && (
+        <CheckoutModal
+          open={modalOpen}
+          onOpenChange={setModalOpen}
+        />
+      )}
     </>
   );
 };

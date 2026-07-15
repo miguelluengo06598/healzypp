@@ -40,7 +40,17 @@ import {
   addToCart,
   remove,
 } from "@/lib/features/carts/cartsSlice";
-import CheckoutModal from "@/components/checkout/CheckoutModal";
+import dynamic from "next/dynamic";
+
+// Lazy-load: CheckoutModal arrastra Stripe.js y react-hook-form (~100+ KB gzip).
+// Con import estático ese peso iba en el bundle inicial de TODAS las páginas
+// (StickySmartCart vive en el layout raíz). ssr:false separa el chunk, y el
+// gate checkoutMounted (abajo) evita descargarlo hasta que el usuario abre
+// el checkout por primera vez.
+const CheckoutModal = dynamic(
+  () => import("@/components/checkout/CheckoutModal"),
+  { ssr: false }
+);
 
 /* ------------------------------------------------------------------ */
 /*  TYPES                                                              */
@@ -425,6 +435,10 @@ const StickySmartCart: React.FC = () => {
   const { drawerOpen, setDrawerOpen, hasItems } = useSmartCart();
 
   const [checkoutOpen, setCheckoutOpen] = useState(false);
+  // true tras la primera apertura y ya no vuelve a false: el chunk del modal
+  // solo se descarga entonces, y mantenerlo montado conserva la animación de
+  // cierre y el caché de clientSecret entre aperturas.
+  const [checkoutMounted, setCheckoutMounted] = useState(false);
 
   if (!hasItems) return null;
 
@@ -433,13 +447,18 @@ const StickySmartCart: React.FC = () => {
       <MiniCartDrawer
         open={drawerOpen}
         onOpenChange={setDrawerOpen}
-        onOpenCheckout={() => setCheckoutOpen(true)}
+        onOpenCheckout={() => {
+          setCheckoutMounted(true);
+          setCheckoutOpen(true);
+        }}
       />
 
-      <CheckoutModal
-        open={checkoutOpen}
-        onOpenChange={setCheckoutOpen}
-      />
+      {checkoutMounted && (
+        <CheckoutModal
+          open={checkoutOpen}
+          onOpenChange={setCheckoutOpen}
+        />
+      )}
     </>
   );
 };
