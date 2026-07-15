@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { newArrivalsData, relatedProductData } from "@/data/products";
-import ProductListSec from "@/components/common/ProductListSec";
+import ProductListSec from "@/sections/ProductListSec";
+import ProductCard from "@/components/common/ProductCard";
 import BreadcrumbProduct from "@/sections/Breadcrumbs/BreadcrumbProduct";
 import Header from "@/components/product-page/Header";
 import ProductSections from "@/components/product-page/ProductSections";
@@ -177,7 +178,11 @@ export default async function ProductPage({
 
       <ProductSectionWrapper section="footer">
         <div className="mb-[50px] sm:mb-20">
-          <ProductListSec title="You might also like" data={relatedProductData} />
+          <ProductListSec
+            title="You might also like"
+            data={relatedProductData}
+            renderItem={(product) => <ProductCard data={product} />}
+          />
         </div>
       </ProductSectionWrapper>
     </main>

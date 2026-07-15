@@ -7,7 +7,6 @@ import {
   CarouselContent,
   CarouselItem,
 } from "@/components/ui/carousel";
-import ProductCard from "./ProductCard";
 import { Product } from "@/types/product.types";
 import Link from "next/link";
 
@@ -15,9 +14,15 @@ type ProductListSecProps = {
   title: string;
   data: Product[];
   viewAllLink?: string;
+  /**
+   * Cómo renderizar cada producto. La sección no importa ninguna tarjeta
+   * concreta: el llamante inyecta la suya (en esta tienda, ProductCard).
+   * Válido desde server components (no cruza frontera server→client).
+   */
+  renderItem: (product: Product) => React.ReactNode;
 };
 
-const ProductListSec = ({ title, data, viewAllLink }: ProductListSecProps) => {
+const ProductListSec = ({ title, data, viewAllLink, renderItem }: ProductListSecProps) => {
   return (
     <section className="max-w-frame mx-auto text-center">
       <motion.h2
@@ -50,7 +55,7 @@ const ProductListSec = ({ title, data, viewAllLink }: ProductListSecProps) => {
                 key={product.id}
                 className="w-full max-w-[198px] sm:max-w-[295px] pl-0"
               >
-                <ProductCard data={product} />
+                {renderItem(product)}
               </CarouselItem>
             ))}
           </CarouselContent>
