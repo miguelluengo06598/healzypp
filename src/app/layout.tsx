@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { SITE_NAME, SITE_URL } from "@/lib/site";
 import "@/styles/globals.css";
 import { satoshi } from "@/styles/fonts";
-import TopBanner from "@/components/layout/Banner/TopBanner";
+import TopBanner from "@/sections/TopBanner";
 import TopNavbar from "@/components/layout/Navbar/TopNavbar";
 import Footer from "@/sections/Footer";
 import HolyLoader from "holy-loader";
