@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Home, Search, ShoppingBag, Heart, User } from "lucide-react";
+import { Home, Search, ShoppingBag, User } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -29,11 +29,14 @@ type NavItem = {
 /*  DATA                                                               */
 /* ------------------------------------------------------------------ */
 
+// "Favoritos" (icon: Heart) se quitó de aquí: apuntaba a /#favoritos, un
+// ancla que no existe en ningún sitio — no hay página de wishlist en la app,
+// solo el toggle de favorito por producto. Reintroducir cuando exista esa
+// página (ver docs/deuda-drawer-sticky-cart-muerto.md).
 const NAV_ITEMS: NavItem[] = [
   { label: "Inicio", icon: Home, href: "/" },
   { label: "Buscar", icon: Search, href: "/shop" },
   { label: "Carrito", icon: ShoppingBag, href: "/cart", badge: "cart" },
-  { label: "Favoritos", icon: Heart, href: "/#favoritos", badge: "wishlist" },
   { label: "Cuenta", icon: User, href: "/account/orders", action: "account" },
 ];
 
