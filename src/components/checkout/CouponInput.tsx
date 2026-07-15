@@ -56,8 +56,8 @@ export default function CouponInput({ subtotalEur, coupon, onChange }: CouponInp
     return (
       <div className="flex items-center justify-between rounded-lg bg-[#F0F4EC] border border-[#487D26]/20 px-3 py-2.5">
         <div className="flex items-center gap-2">
-          <span className="text-xs font-semibold text-[#487D26] tracking-wide">{coupon.code}</span>
-          <span className="text-xs text-[#487D26]">
+          <span className="text-xs font-semibold text-[#3a6620] tracking-wide">{coupon.code}</span>
+          <span className="text-xs text-[#3a6620]">
             — -{coupon.discount.toFixed(2).replace(".", ",")}€ descuento
           </span>
         </div>
@@ -98,7 +98,7 @@ export default function CouponInput({ subtotalEur, coupon, onChange }: CouponInp
           className={cn(
             "rounded-lg px-4 py-2.5 text-sm font-medium transition-colors whitespace-nowrap",
             loading || !code.trim()
-              ? "bg-[#E5E5E5] text-black/40 cursor-not-allowed"
+              ? "bg-[#E5E5E5] text-black/60 cursor-not-allowed"
               : "bg-black text-white hover:bg-black/80"
           )}
         >

@@ -9,45 +9,53 @@ import Image from "next/image";
 import NewsLetterSection from "./NewsLetterSection";
 import LayoutSpacing from "./LayoutSpacing";
 
-const socialsData: SocialNetworks[] = [
+const socialsData: (SocialNetworks & { name: string })[] = [
   {
     id: 1,
     icon: <FaTwitter />,
     url: "https://twitter.com",
+    name: "X",
   },
   {
     id: 2,
     icon: <FaFacebookF />,
     url: "https://facebook.com",
+    name: "Facebook",
   },
   {
     id: 3,
     icon: <FaInstagram />,
     url: "https://instagram.com",
+    name: "Instagram",
   },
 
 ];
 
-const paymentBadgesData: PaymentBadge[] = [
+const paymentBadgesData: (PaymentBadge & { name: string })[] = [
   {
     id: 1,
     srcUrl: "/icons/Visa.svg",
+    name: "Visa",
   },
   {
     id: 2,
     srcUrl: "/icons/mastercard.svg",
+    name: "Mastercard",
   },
   {
     id: 3,
     srcUrl: "/icons/paypal.svg",
+    name: "PayPal",
   },
   {
     id: 4,
     srcUrl: "/icons/applePay.svg",
+    name: "Apple Pay",
   },
   {
     id: 5,
     srcUrl: "/icons/googlePay.svg",
+    name: "Google Pay",
   },
 ];
 
@@ -81,6 +89,7 @@ const Footer = () => {
                   <Link
                     href={social.url}
                     key={social.id}
+                    aria-label={`Síguenos en ${social.name}`}
                     className="bg-white hover:bg-[#487D26] hover:text-white transition-all mr-3 w-7 h-7 rounded-full border border-black/20 flex items-center justify-center p-1.5"
                   >
                     {social.icon}
@@ -116,7 +125,7 @@ const Footer = () => {
                     width={33}
                     height={15}
                     style={{ height: "15px", width: "auto" }}
-                    alt="payment badge"
+                    alt={badge.name}
                   />
                 </span>
               ))}

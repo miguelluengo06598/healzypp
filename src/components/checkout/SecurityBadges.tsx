@@ -55,8 +55,11 @@ const SecurityBadges: React.FC<SecurityBadgesProps> = ({ className = "" }) => {
         return (
           <motion.div
             key={b.label}
+            tabIndex={0}
             onMouseEnter={() => setHovered(b.label)}
             onMouseLeave={() => setHovered(null)}
+            onFocus={() => setHovered(b.label)}
+            onBlur={() => setHovered(null)}
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             transition={{ type: "spring", stiffness: 400, damping: 24 }}

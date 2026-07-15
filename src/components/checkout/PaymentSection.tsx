@@ -206,7 +206,7 @@ export default function PaymentSection({
           disabled={disabled}
           className={cn(
             "w-full rounded-xl h-14 text-base font-bold text-white transition-all flex items-center justify-center gap-2",
-            disabled ? "bg-[#487D26]/50 cursor-not-allowed" : "bg-[#487D26] hover:bg-[#3a6620]"
+            disabled ? "bg-[#3a6620]/85 cursor-not-allowed" : "bg-[#487D26] hover:bg-[#3a6620]"
           )}
         >
           <FaLock className="text-sm" />
