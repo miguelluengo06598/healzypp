@@ -1,5 +1,5 @@
 import React from "react";
-import PhotoSection from "./PhotoSection";
+import PhotoSection from "@/sections/PhotoSection";
 import { Product } from "@/types/product.types";
 import { integralCF } from "@/styles/fonts";
 import { cn } from "@/lib/utils";
