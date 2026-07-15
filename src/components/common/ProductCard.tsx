@@ -156,7 +156,6 @@ const ProductCard = ({ data, imagePriority = false }: ProductCardProps) => {
       }}
       whileHover={{ y: -6 }}
       transition={SPRING_LIFT}
-      onClick={() => openPreview(data)}
     >
       {/* ============================================================ */}
       {/*  IMAGE AREA                                                  */}

@@ -160,7 +160,7 @@ export default function CheckoutPage() {
       </header>
 
       {/* ── Body ─────────────────────────────────────────────────────────────────── */}
-      <div className="max-w-5xl mx-auto px-4 py-6 md:py-10">
+      <main className="max-w-5xl mx-auto px-4 py-6 md:py-10">
         {/* Mobile: collapsible summary at top */}
         <div className="lg:hidden mb-6">
           <CartOrderSummary
@@ -238,7 +238,7 @@ export default function CheckoutPage() {
             />
           </div>
         </div>
-      </div>
+      </main>
     </div>
   )
 }
