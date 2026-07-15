@@ -139,7 +139,7 @@ export default function ShippingMethodSection({
           "mt-5 w-full sm:w-auto sm:self-end rounded-xl text-white font-semibold px-8 py-3 text-sm transition-colors",
           selected
             ? "bg-[#487D26] hover:bg-[#3a6620]"
-            : "bg-[#487D26]/40 cursor-not-allowed"
+            : "bg-[#3a6620]/85 cursor-not-allowed"
         )}
       >
         Continuar con el pago →
