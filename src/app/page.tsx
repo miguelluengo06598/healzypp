@@ -1,5 +1,5 @@
 import ProductListSec from "@/components/common/ProductListSec";
-import Brands from "@/components/homepage/Brands";
+import Brands from "@/sections/Brands";
 import HeroSectionDynamica from "@/components/homepage/HeroSectionDynamica";
 import HealzypBrand from "@/components/homepage/HealzypBrand";
 import { newArrivalsData, topSellingData } from "@/data/products";
