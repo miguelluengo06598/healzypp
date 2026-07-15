@@ -14,6 +14,17 @@ import type { Product } from "@/types/product.types";
 
 const data = newArrivalsData;
 
+// Pre-genera cada ficha en build time (SSG): el catálogo vive en memoria, así
+// que no hay razón para pagar un render por request. Las URLs con slug no
+// canónico no se listan aquí — se renderizan bajo demanda (dynamicParams=true
+// por defecto) y salen por el permanentRedirect de abajo, igual que antes.
+// Al conectar el catálogo a Supabase, sustituir por ISR (`revalidate`).
+export function generateStaticParams() {
+  return data.map((product) => ({
+    slug: [String(product.id), slugify(product.title)],
+  }));
+}
+
 // Sin rating/nº de reseñas: los valores del mock (4.8, 128) son placeholders
 // sin respaldo real — no indexar cifras inventadas.
 function productDescription(product: Product): string {
