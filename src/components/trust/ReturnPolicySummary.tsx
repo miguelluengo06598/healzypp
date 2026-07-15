@@ -49,7 +49,7 @@ const ReturnPolicySummary: React.FC<ReturnPolicySummaryProps> = ({
       </div>
 
       <Link
-        href="/legal/terms"
+        href="/terms"
         className="shrink-0 text-xs font-medium text-brand hover:underline flex items-center gap-0.5"
       >
         Ver política
