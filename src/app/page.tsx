@@ -1,13 +1,13 @@
 import ProductListSec from "@/components/common/ProductListSec";
 import Brands from "@/sections/Brands";
-import HeroSectionDynamica from "@/components/homepage/HeroSectionDynamica";
+import Hero from "@/sections/Hero";
 import HealzypBrand from "@/sections/HealzypBrand";
 import { newArrivalsData, topSellingData } from "@/data/products";
 
 export default function Home() {
   return (
     <>
-      <HeroSectionDynamica />
+      <Hero />
       <Brands />
       <main className="my-[50px] sm:my-[72px]">
         <ProductListSec

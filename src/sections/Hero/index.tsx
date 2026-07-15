@@ -11,27 +11,12 @@ import { Badge } from "@/components/ui/badge";
 import AnimatedCounter from "@/components/ui/AnimatedCounter";
 import { cn } from "@/lib/utils";
 import { integralCF } from "@/styles/fonts";
-import { newArrivalsData } from "@/data/products";
+import type { HeroProps } from "./types";
+import { heroDefaults } from "./data";
 
 /* ------------------------------------------------------------------ */
-/*  TYPES                                                              */
+/*  DATA (solo visual — los iconos no son serializables como props)    */
 /* ------------------------------------------------------------------ */
-
-type StatItem = {
-  value: number;
-  suffix: string;
-  label: string;
-};
-
-/* ------------------------------------------------------------------ */
-/*  DATA                                                               */
-/* ------------------------------------------------------------------ */
-
-const STATS: StatItem[] = [
-  { value: 100, suffix: "%", label: "Ingredientes Naturales" },
-  { value: 2000, suffix: "+", label: "Clientes Satisfechos" },
-  { value: 30, suffix: "", label: "Días de devolución" },
-];
 
 const FLOATING_BADGES = [
   { icon: Truck, label: "Envío gratis", top: "12%", left: "8%", delay: 0.3 },
@@ -104,7 +89,18 @@ const HeroSkeleton: React.FC = () => {
 /*  MAIN COMPONENT                                                     */
 /* ------------------------------------------------------------------ */
 
-const HeroSectionDynamica: React.FC = () => {
+const Hero: React.FC<HeroProps> = (props) => {
+  const {
+    badgeLabel,
+    headline,
+    headlineHighlight,
+    description,
+    primaryCta,
+    secondaryCta,
+    stats,
+    heroImage,
+    miniCard,
+  } = { ...heroDefaults, ...props };
   const [isLoading, setIsLoading] = useState(true);
   const containerRef = useRef<HTMLElement>(null);
 
@@ -178,7 +174,7 @@ const HeroSectionDynamica: React.FC = () => {
                 className="px-3 py-1 text-xs font-semibold tracking-wide uppercase"
               >
                 <Sparkles className="w-3 h-3 mr-1.5" />
-                Novedad 2026
+                {badgeLabel}
               </Badge>
             </motion.div>
 
@@ -190,9 +186,9 @@ const HeroSectionDynamica: React.FC = () => {
                 "text-[40px] leading-[44px] sm:text-5xl sm:leading-[52px] md:text-[56px] md:leading-[60px] lg:text-[64px] lg:leading-[68px] text-black"
               )}
             >
-              Bienestar real{" "}
+              {headline}{" "}
               <span className="relative inline-block">
-                <span className="relative z-10">para tu día a día</span>
+                <span className="relative z-10">{headlineHighlight}</span>
                 <span className="absolute bottom-2 left-0 w-full h-3 bg-brand/20 -rotate-1 rounded-sm -z-0" />
               </span>
             </motion.h1>
@@ -202,8 +198,7 @@ const HeroSectionDynamica: React.FC = () => {
               variants={STAGGER_ITEM}
               className="text-base md:text-lg text-black/60 max-w-xl leading-relaxed"
             >
-              Suplementos naturales diseñados para mejorar tu bienestar sin
-              complicaciones. Calidad premium, resultados reales.
+              {description}
             </motion.p>
 
             {/* CTAs */}
@@ -224,8 +219,8 @@ const HeroSectionDynamica: React.FC = () => {
                     "transition-shadow"
                   )}
                 >
-                  <Link href="/shop">
-                    Comprar Ahora
+                  <Link href={primaryCta.href}>
+                    {primaryCta.label}
                     <ArrowRight className="w-4 h-4 ml-2" />
                   </Link>
                 </Button>
@@ -244,7 +239,7 @@ const HeroSectionDynamica: React.FC = () => {
                     "hover:bg-white hover:border-black/25 hover:shadow-lg transition-all"
                   )}
                 >
-                  <Link href="/shop#new-arrivals">Descubrir</Link>
+                  <Link href={secondaryCta.href}>{secondaryCta.label}</Link>
                 </Button>
               </motion.div>
             </motion.div>
@@ -254,7 +249,7 @@ const HeroSectionDynamica: React.FC = () => {
               variants={STAGGER_ITEM}
               className="flex flex-wrap items-center gap-x-6 gap-y-3 pt-4 md:pt-6"
             >
-              {STATS.map((stat) => (
+              {stats.map((stat) => (
                 <div key={stat.label} className="flex flex-col">
                   <span className="font-bold text-2xl md:text-3xl lg:text-[36px] text-black">
                     <AnimatedCounter from={0} to={stat.value} />
@@ -280,8 +275,8 @@ const HeroSectionDynamica: React.FC = () => {
               {/* Main product image */}
               <div className="relative w-full h-full rounded-[24px] md:rounded-[32px] overflow-hidden bg-[#F0EEED] shadow-2xl">
                 <Image
-                  src="/images/FOTOVINDEMANPORT.png"
-                  alt="Gominolas de vinagre de manzana HEALZYP"
+                  src={heroImage.src}
+                  alt={heroImage.alt}
                   fill
                   className="object-contain p-6 md:p-10"
                   priority
@@ -331,8 +326,8 @@ const HeroSectionDynamica: React.FC = () => {
               >
                 <div className="relative w-12 h-12 rounded-[10px] bg-[#F0EEED] overflow-hidden shrink-0">
                   <Image
-                    src={newArrivalsData[0]?.srcUrl ?? "/images/FL1.png"}
-                    alt={newArrivalsData[0]?.title ?? "Producto destacado"}
+                    src={miniCard.imageSrc}
+                    alt={miniCard.imageAlt}
                     fill
                     className="object-contain p-1"
                     sizes="48px"
@@ -340,9 +335,9 @@ const HeroSectionDynamica: React.FC = () => {
                 </div>
                 <div>
                   <p className="text-xs font-bold text-black leading-tight">
-                    Más vendido
+                    {miniCard.title}
                   </p>
-                  <p className="text-[10px] text-black/50">Desde €29</p>
+                  <p className="text-[10px] text-black/50">{miniCard.subtitle}</p>
                 </div>
                 <div className="w-6 h-6 rounded-full bg-brand flex items-center justify-center shrink-0">
                   <ArrowRight className="w-3 h-3 text-white" />
@@ -356,4 +351,4 @@ const HeroSectionDynamica: React.FC = () => {
   );
 };
 
-export default HeroSectionDynamica;
+export default Hero;
