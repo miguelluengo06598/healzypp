@@ -23,8 +23,10 @@ una parte crea inconsistencias, y en un caso un bucle de redirects.
    y leer de Supabase (comentario en el propio archivo).
 
 3. **`src/app/shop/product/[...slug]/page.tsx`** — `generateMetadata`
-   (title/description/canonical/OG/Twitter), el JSON-LD Product/BreadcrumbList
-   y el `permanentRedirect` de respaldo leen del mock. El precio del JSON-LD
+   (title/description/canonical/OG/Twitter), el JSON-LD Product/BreadcrumbList,
+   el `permanentRedirect` de respaldo y `generateStaticParams` (Fase 3, FIX 2:
+   SSG desde el mock; al migrar, sustituir por ISR con `revalidate`) leen del
+   mock. El precio del JSON-LD
    sale de `BUNDLES` (`src/lib/bundles.ts`), anclado a producción por la
    verificación del checkout (el pago se rechaza si diverge de
    `bundles.precio` en Supabase) — esa garantía debe preservarse o sustituirse
