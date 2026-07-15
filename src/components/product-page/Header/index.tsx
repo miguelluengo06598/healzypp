@@ -7,7 +7,7 @@ import Rating from "@/components/ui/Rating";
 import { FaCheck } from "react-icons/fa";
 // Cambio: ColorSelection y SizeSelection reemplazados por BundleSelection
 import BundleSelection from "./BundleSelection";
-import DeliveryTimeline from "./DeliveryTimeline";
+import DeliveryTimeline from "@/sections/DeliveryTimeline";
 import CheckoutActions from "./CheckoutActions";
 
 const BENEFIT_BUBBLES = [

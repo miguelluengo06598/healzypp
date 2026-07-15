@@ -3,7 +3,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Check, Package, Truck, Home, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useDeliveryCountdown } from "@/hooks/useDeliveryCountdown";
+import { useDeliveryCountdown } from "./useDeliveryCountdown";
 
 /* ═══════════════════════════════════════════════════════════════════════════ */
 /*  TYPES                                                                      */
