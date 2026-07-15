@@ -100,7 +100,7 @@ const Header = () => {
             src="/icons/big-star.svg"
             height={104}
             width={104}
-            alt="big star"
+            alt=""
             className="absolute right-7 xl:right-0 top-12 max-w-[76px] max-h-[76px] lg:max-w-24 lg:max-h-max-w-24 xl:max-w-[104px] xl:max-h-[104px] animate-[spin_4s_infinite]"
           />
           <Image
@@ -108,7 +108,7 @@ const Header = () => {
             src="/icons/small-star.svg"
             height={56}
             width={56}
-            alt="small star"
+            alt=""
             className="absolute left-7 md:left-0 top-36 sm:top-64 md:top-44 lg:top-56 max-w-11 max-h-11 md:max-w-14 md:max-h-14 animate-[spin_3s_infinite]"
           />
         </motion.section>

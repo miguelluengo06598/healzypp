@@ -332,7 +332,7 @@ const HeroSectionDynamica: React.FC = () => {
                 <div className="relative w-12 h-12 rounded-[10px] bg-[#F0EEED] overflow-hidden shrink-0">
                   <Image
                     src={newArrivalsData[0]?.srcUrl ?? "/images/FL1.png"}
-                    alt="Producto"
+                    alt={newArrivalsData[0]?.title ?? "Producto destacado"}
                     fill
                     className="object-contain p-1"
                     sizes="48px"

@@ -28,26 +28,31 @@ const socialsData: SocialNetworks[] = [
 
 ];
 
-const paymentBadgesData: PaymentBadge[] = [
+const paymentBadgesData: (PaymentBadge & { name: string })[] = [
   {
     id: 1,
     srcUrl: "/icons/Visa.svg",
+    name: "Visa",
   },
   {
     id: 2,
     srcUrl: "/icons/mastercard.svg",
+    name: "Mastercard",
   },
   {
     id: 3,
     srcUrl: "/icons/paypal.svg",
+    name: "PayPal",
   },
   {
     id: 4,
     srcUrl: "/icons/applePay.svg",
+    name: "Apple Pay",
   },
   {
     id: 5,
     srcUrl: "/icons/googlePay.svg",
+    name: "Google Pay",
   },
 ];
 
@@ -116,7 +121,7 @@ const Footer = () => {
                     width={33}
                     height={15}
                     style={{ height: "15px", width: "auto" }}
-                    alt="payment badge"
+                    alt={badge.name}
                   />
                 </span>
               ))}
