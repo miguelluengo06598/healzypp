@@ -1,7 +1,7 @@
 import ProductListSec from "@/components/common/ProductListSec";
 import Brands from "@/sections/Brands";
 import HeroSectionDynamica from "@/components/homepage/HeroSectionDynamica";
-import HealzypBrand from "@/components/homepage/HealzypBrand";
+import HealzypBrand from "@/sections/HealzypBrand";
 import { newArrivalsData, topSellingData } from "@/data/products";
 
 export default function Home() {
