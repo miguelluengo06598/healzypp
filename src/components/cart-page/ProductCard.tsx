@@ -58,6 +58,7 @@ const ProductCard = ({ data }: ProductCardProps) => {
                 })
               )
             }
+            aria-label="Eliminar producto del carrito"
           >
             <PiTrashFill className="text-xl md:text-2xl text-red-600" />
           </Button>

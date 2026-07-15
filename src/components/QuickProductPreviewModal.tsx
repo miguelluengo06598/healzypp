@@ -508,6 +508,7 @@ const QuickProductPreviewModal: React.FC = () => {
                           : "border-transparent"
                       )}
                       title={c.name}
+                      aria-label={c.name}
                     />
                   ))}
                 </div>
