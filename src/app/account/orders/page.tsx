@@ -1,7 +1,7 @@
 import { Metadata } from "next";
 import { ShoppingBag, AlertCircle } from "lucide-react";
 import { getOrdersByUser } from "@/lib/db/user-orders";
-import OrderTimeline from "@/components/orders/OrderTimeline";
+import OrderTimeline from "@/sections/OrderTimeline";
 import type { OrderStatusEnum } from "@/types/database.types";
 
 export const metadata: Metadata = {
