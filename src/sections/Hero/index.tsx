@@ -52,7 +52,13 @@ const STAGGER_ITEM = {
     opacity: 1,
     y: 0,
     filter: "blur(0px)",
-    transition: { type: "spring", stiffness: 300, damping: 28 },
+    transition: {
+      type: "spring",
+      stiffness: 300,
+      damping: 28,
+      // blur() no admite negativos y el spring rebasa el 0 — el filter va en tween
+      filter: { type: "tween", duration: 0.45, ease: "easeOut" },
+    },
   },
 };
 

@@ -74,6 +74,17 @@ export const mergeSpring = (
   return { ...config, ...overrides };
 };
 
+/**
+ * Transición para la propiedad `filter`: blur() no admite valores negativos y
+ * los springs rebasan el 0 al asentarse, así que cada frame con blur(-0.0Xpx)
+ * se descarta con un warning en consola. El filter siempre va en tween.
+ */
+export const blurTweenTransition: Transition = {
+  type: "tween",
+  duration: 0.45,
+  ease: "easeOut",
+};
+
 /* ═══════════════════════════════════════════════════════════════════════════ */
 /*  2. VARIANTS REUTILIZABLES                                                 */
 /* ═══════════════════════════════════════════════════════════════════════════ */
@@ -105,7 +116,7 @@ export const fadeInBlurVariants: Variants = {
     opacity: 1,
     y: 0,
     filter: "blur(0px)",
-    transition: springConfigs.soft,
+    transition: { ...springConfigs.soft, filter: blurTweenTransition },
   },
 };
 
@@ -178,7 +189,7 @@ export const staggerItemVariants: Variants = {
     opacity: 1,
     y: 0,
     filter: "blur(0px)",
-    transition: springConfigs.soft,
+    transition: { ...springConfigs.soft, filter: blurTweenTransition },
   },
 };
 
