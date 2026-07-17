@@ -135,7 +135,7 @@ const ProgressShippingBar: React.FC<ProgressShippingBarProps> = ({
         <span className="flex items-center gap-1 text-black/60">
           <Truck className="w-3.5 h-3.5" />
           {remaining > 0
-            ? `Te faltan €${remaining.toFixed(0)} para envío gratis`
+            ? `Te faltan €${remaining.toFixed(2)} para envío gratis`
             : "¡Envío gratis desbloqueado! 🎉"}
         </span>
         <span className="font-semibold text-brand">{Math.round(pct)}%</span>
@@ -177,7 +177,8 @@ const AnimatedCheckoutCTA: React.FC<AnimatedCheckoutCTAProps> = ({
           Pagar ahora
         </span>
         <span className="flex items-center gap-2">
-          <span className="text-lg">€{Math.round(total)}</span>
+          {/* Nunca redondear el total a euros enteros: 49,99€ se mostraba como €50 */}
+          <span className="text-lg">€{total.toFixed(2)}</span>
           <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
         </span>
       </Button>
@@ -384,12 +385,12 @@ const MiniCartDrawer: React.FC<MiniCartDrawerProps> = ({
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between text-black/60">
                   <span>Subtotal</span>
-                  <span>€{totalPrice.toFixed(0)}</span>
+                  <span>€{totalPrice.toFixed(2)}</span>
                 </div>
                 {discount > 0 && (
                   <div className="flex justify-between text-brand">
                     <span>Descuento</span>
-                    <span>-€{discount.toFixed(0)}</span>
+                    <span>-€{discount.toFixed(2)}</span>
                   </div>
                 )}
                 <div className="flex justify-between text-black/60">
@@ -399,7 +400,7 @@ const MiniCartDrawer: React.FC<MiniCartDrawerProps> = ({
                 <Separator className="my-2" />
                 <div className="flex justify-between text-base font-bold">
                   <span>Total</span>
-                  <span>€{adjustedTotalPrice.toFixed(0)}</span>
+                  <span>€{adjustedTotalPrice.toFixed(2)}</span>
                 </div>
               </div>
 
