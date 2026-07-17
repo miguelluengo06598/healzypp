@@ -4,7 +4,7 @@ import ProductListSec from "@/sections/ProductListSec";
 import ProductCard from "@/components/common/ProductCard";
 import BreadcrumbProduct from "@/sections/Breadcrumbs/BreadcrumbProduct";
 import Header from "@/components/product-page/Header";
-import ProductSections from "@/components/product-page/ProductSections";
+import ProductSections from "@/sections/ProductSections";
 import ProductPageTracker from "@/components/tracking/ProductPageTracker";
 import ProductMetaTracker from "@/components/tracking/ProductMetaTracker";
 import ProductSectionWrapper from "@/components/tracking/ProductSectionWrapper";
@@ -174,7 +174,7 @@ export default async function ProductPage({
       </ProductSectionWrapper>
 
       {/* ── Secciones de marketing: beneficios, pasos e información ── */}
-      <ProductSections />
+      <ProductSections SectionWrapper={ProductSectionWrapper} />
 
       <ProductSectionWrapper section="footer">
         <div className="mb-[50px] sm:mb-20">

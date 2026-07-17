@@ -2,99 +2,49 @@ import Image from "next/image";
 import { cn } from "@/lib/utils";
 import { integralCF } from "@/styles/fonts";
 import CustomerReviews from "@/sections/CustomerReviews";
-import ProductSectionWrapper from "@/components/tracking/ProductSectionWrapper";
+import {
+  defaultBenefits,
+  defaultSteps,
+  defaultInfoBlocks,
+  type BenefitItem,
+  type StepItem,
+  type InfoBlock,
+} from "./data";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ProductSections
+// ProductSections — sección pura. El contenido vive en ./data.ts (defaults) o
+// llega por props; el envoltorio de tracking se inyecta vía SectionWrapper
+// (por defecto, sin tracking) para no acoplar la sección al analytics de
+// este proyecto.
 // ─────────────────────────────────────────────────────────────────────────────
 
-// ─── Sección 1: Beneficios ────────────────────────────────────────────────────
-const benefits = [
-  {
-    id: 1,
-    title: "Mejora la digestión",
-    description:
-      "El vinagre de manzana ayuda a equilibrar el pH del estómago y favorece el crecimiento de bacterias beneficiosas, mejorando el tránsito intestinal de forma natural.",
-    image: "/images/MEJORALADIGESTION.png",
-  },
-  {
-    id: 2,
-    title: "Aumenta la energía",
-    description:
-      "Los ácidos orgánicos del vinagre de manzana contribuyen a una liberación de energía más sostenida a lo largo del día, sin los picos de azúcar de otras alternativas.",
-    image: "/images/AUMENTALAENERGIAVINDEMAN.png",
-  },
-  {
-    id: 3,
-    title: "Controla el peso",
-    description:
-      "Estudios sugieren que el ácido acético ayuda a reducir el apetito y a regular el metabolismo de los lípidos, apoyando un peso corporal saludable.",
-    image: "/images/CONTROLDEPESOVINDEMAN.png",
-  },
-];
+type SectionWrapperType = React.ComponentType<{
+  section: string;
+  children: React.ReactNode;
+}>;
 
-// ─── Sección 2: Pasos ─────────────────────────────────────────────────────────
-const steps = [
-  {
-    id: 1,
-    title: "Toma 2 gominolas al día",
-    description:
-      "Consume 2 gominolas por la mañana, preferiblemente antes del desayuno, para aprovechar al máximo sus propiedades digestivas.",
-  },
-  {
-    id: 2,
-    title: "Mastica despacio",
-    description:
-      "Mastica cada gominola lentamente para que el vinagre de manzana se libere de forma gradual y tu cuerpo lo asimile correctamente.",
-  },
-  {
-    id: 3,
-    title: "Mantén la constancia",
-    description:
-      "Los mejores resultados se obtienen con un consumo regular. Incorpora las gominolas a tu rutina diaria durante al menos 4 semanas.",
-  },
-];
+const PlainWrapper: SectionWrapperType = ({ children }) => <>{children}</>;
 
-// ─── Sección 3: Bloques imagen/texto ──────────────────────────────────────────
-const infoBlocks = [
-  {
-    id: 1,
-    title: "Ingredientes 100 % naturales",
-    description:
-      "Nuestras gominolas están elaboradas con vinagre de manzana orgánico certificado, sin colorantes artificiales ni conservantes. Cada unidad aporta la misma cantidad de ácido acético que un vasito de vinagre, pero con un sabor agradable y sin el ardor. Aptas para veganos y sin gluten.",
-    image: "/images/PRODUCTOSNATURALES.png",
-    imageAlt: "Ingredientes naturales de las gominolas",
-    imageRight: false,
-  },
-  {
-    id: 2,
-    title: "Fabricación artesanal y sostenible",
-    description:
-      "Cada lote se produce en pequeñas cantidades para garantizar la máxima calidad. Utilizamos envases reciclables y reducimos al mínimo nuestra huella de carbono. Trabajamos con productores locales de manzana para apoyar la economía de proximidad y asegurar la frescura de las materias primas.",
-    image: "/images/FABRICACIONARTESANALVINDEMAN.png",
-    imageAlt: "Proceso de fabricación artesanal",
-    imageRight: true,
-  },
-  {
-    id: 3,
-    title: "Respaldado por la ciencia",
-    description:
-      "El vinagre de manzana ha sido objeto de numerosos estudios clínicos que avalan sus beneficios sobre la glucemia, el colesterol y la microbiota intestinal. Nuestras gominolas ofrecen una dosis estandarizada y reproducible para que puedas confiar en cada toma. Consulta con tu médico si tomas medicación.",
-    image: "/images/doctorvindeman.png",
-    imageAlt: "Respaldo científico del producto",
-    imageRight: false,
-  },
-];
+interface ProductSectionsProps {
+  benefits?: BenefitItem[];
+  steps?: StepItem[];
+  infoBlocks?: InfoBlock[];
+  /** Esta tienda inyecta el ProductSectionWrapper de tracking desde la página */
+  SectionWrapper?: SectionWrapperType;
+}
 
-// ─────────────────────────────────────────────────────────────────────────────
-
-export default function ProductSections() {
+export default function ProductSections({
+  benefits = defaultBenefits,
+  steps = defaultSteps,
+  infoBlocks = defaultInfoBlocks,
+  SectionWrapper = PlainWrapper,
+}: ProductSectionsProps) {
   return (
     <>
       {/* ═══════════════════════════════════════════════════════════════════════
           SECCIÓN 1 — BENEFICIOS
       ════════════════════════════════════════════════════════════════════════ */}
-      <ProductSectionWrapper section="beneficios">
+      <SectionWrapper section="beneficios">
       <section className="max-w-frame mx-auto px-4 xl:px-0 mb-[50px] sm:mb-20">
         <hr className="h-[1px] border-t-black/10 mb-10 sm:mb-16" />
 
@@ -132,12 +82,12 @@ export default function ProductSections() {
           ))}
         </div>
       </section>
-      </ProductSectionWrapper>
+      </SectionWrapper>
 
       {/* ═══════════════════════════════════════════════════════════════════════
           SECCIÓN 2 — 3 PASOS PARA MEJORAR TU SALUD
       ════════════════════════════════════════════════════════════════════════ */}
-      <ProductSectionWrapper section="descripcion">
+      <SectionWrapper section="descripcion">
       <section className="max-w-frame mx-auto px-4 xl:px-0 mb-[50px] sm:mb-20">
         <hr className="h-[1px] border-t-black/10 mb-10 sm:mb-16" />
 
@@ -173,12 +123,12 @@ export default function ProductSections() {
           ))}
         </div>
       </section>
-      </ProductSectionWrapper>
+      </SectionWrapper>
 
       {/* ═══════════════════════════════════════════════════════════════════════
           SECCIÓN 3 — BLOQUES IMAGEN/TEXTO ALTERNADOS
       ════════════════════════════════════════════════════════════════════════ */}
-      <ProductSectionWrapper section="ingredientes">
+      <SectionWrapper section="ingredientes">
       <section className="max-w-frame mx-auto px-4 xl:px-0 mb-[50px] sm:mb-20">
         <hr className="h-[1px] border-t-black/10 mb-10 sm:mb-16" />
 
@@ -238,14 +188,14 @@ export default function ProductSections() {
           ))}
         </div>
       </section>
-      </ProductSectionWrapper>
+      </SectionWrapper>
 
       {/* ═══════════════════════════════════════════════════════════════════════
           SECCIÓN 4 — RESEÑAS VERIFICADAS DE CLIENTES
       ════════════════════════════════════════════════════════════════════════ */}
-      <ProductSectionWrapper section="testimonios">
+      <SectionWrapper section="testimonios">
         <CustomerReviews />
-      </ProductSectionWrapper>
+      </SectionWrapper>
     </>
   );
 }
