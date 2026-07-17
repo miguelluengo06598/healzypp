@@ -20,6 +20,9 @@
 .DS_Store
 *.pem
 
+# graphify — salida generada, no versionar
+/graphify-out/
+
 # debug
 npm-debug.log*
 yarn-debug.log*
