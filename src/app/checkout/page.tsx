@@ -7,6 +7,7 @@ import { Elements } from "@stripe/react-stripe-js"
 import { useAppSelector, useAppDispatch } from "@/lib/hooks/redux"
 import { clearCart } from "@/lib/features/carts/cartsSlice"
 import { RootState } from "@/lib/store"
+import { eurosToCents, centsToEuros } from "@/lib/money"
 import { stripePromise } from "@/lib/stripe"
 import { integralCF } from "@/styles/fonts"
 import { cn } from "@/lib/utils"
@@ -41,7 +42,15 @@ export default function CheckoutPage() {
 
   const shippingCostEur = checkout.shippingMethod?.price ?? 0
   const couponDiscountEur = checkout.coupon?.discount ?? 0
-  const totalEur = Math.max(0, adjustedTotalPrice - couponDiscountEur + shippingCostEur)
+  // En céntimos: sumar euros float aquí produce totales tipo 49.98999999999999
+  const totalEur = centsToEuros(
+    Math.max(
+      0,
+      eurosToCents(adjustedTotalPrice) -
+        eurosToCents(couponDiscountEur) +
+        eurosToCents(shippingCostEur)
+    )
+  )
 
   // Called by PaymentSection after Stripe creates the PaymentMethod
   const handlePaymentSubmit = async (paymentMethodId: string) => {

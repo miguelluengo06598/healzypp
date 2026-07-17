@@ -5,6 +5,7 @@ import { PiTrashFill } from "react-icons/pi";
 import Image from "next/image";
 import Link from "next/link";
 import CartCounter from "@/components/ui/CartCounter";
+import { eurosToCents, centsToEuros } from "@/lib/money";
 import { Button } from "../ui/button";
 import {
   addToCart,
@@ -81,27 +82,31 @@ const ProductCard = ({ data }: ProductCardProps) => {
           <div className="flex items-center space-x-[5px] xl:space-x-2.5">
             {data.discount.percentage > 0 ? (
               <span className="font-bold text-black text-xl xl:text-2xl">
-                {`€${Math.round(
-                  data.price - (data.price * data.discount.percentage) / 100
-                )}`}
+                {`€${centsToEuros(
+                  Math.round(
+                    eurosToCents(data.price) * (1 - data.discount.percentage / 100)
+                  )
+                ).toFixed(2)}`}
               </span>
             ) : data.discount.amount > 0 ? (
               <span className="font-bold text-black text-xl xl:text-2xl">
-                {`€${data.price - data.discount.amount}`}
+                {`€${centsToEuros(
+                  eurosToCents(data.price) - eurosToCents(data.discount.amount)
+                ).toFixed(2)}`}
               </span>
             ) : (
               <span className="font-bold text-black text-xl xl:text-2xl">
-                €{data.price}
+                €{data.price.toFixed(2)}
               </span>
             )}
             {data.discount.percentage > 0 && (
               <span className="font-bold text-black/40 line-through text-xl xl:text-2xl">
-                €{data.price}
+                €{data.price.toFixed(2)}
               </span>
             )}
             {data.discount.amount > 0 && (
               <span className="font-bold text-black/40 line-through text-xl xl:text-2xl">
-                €{data.price}
+                €{data.price.toFixed(2)}
               </span>
             )}
             {data.discount.percentage > 0 ? (

@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/sheet";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
+import { eurosToCents, centsToEuros } from "@/lib/money";
 import { integralCF } from "@/styles/fonts";
 import { useAppSelector, useAppDispatch } from "@/lib/hooks/redux";
 import { RootState } from "@/lib/store";
@@ -190,12 +191,14 @@ const AnimatedCheckoutCTA: React.FC<AnimatedCheckoutCTAProps> = ({
 const CartItemRow: React.FC<{ item: CartItem }> = ({ item }) => {
   const dispatch = useAppDispatch();
 
+  // En céntimos: el Math.round en euros de antes convertía 49,99€ en 50€
   const unitPrice = useMemo(() => {
+    const priceCents = eurosToCents(item.price);
     if (item.discount.percentage > 0) {
-      return Math.round(item.price - (item.price * item.discount.percentage) / 100);
+      return centsToEuros(Math.round(priceCents * (1 - item.discount.percentage / 100)));
     }
     if (item.discount.amount > 0) {
-      return item.price - item.discount.amount;
+      return centsToEuros(priceCents - eurosToCents(item.discount.amount));
     }
     return item.price;
   }, [item.discount, item.price]);
@@ -228,10 +231,10 @@ const CartItemRow: React.FC<{ item: CartItem }> = ({ item }) => {
           {item.attributes.filter(Boolean).join(" · ")}
         </p>
         <div className="flex items-center gap-2 mt-1">
-          <span className="text-sm font-bold text-brand">€{unitPrice}</span>
+          <span className="text-sm font-bold text-brand">€{unitPrice.toFixed(2)}</span>
           {item.discount.percentage > 0 && (
             <span className="text-[11px] line-through text-black/40">
-              €{item.price}
+              €{item.price.toFixed(2)}
             </span>
           )}
         </div>

@@ -2,6 +2,7 @@
 // All writes use createServiceClient (bypasses RLS)
 
 import { createServiceClient } from "@/lib/supabase"
+import { eurosToCents, centsToEuros } from "@/lib/money"
 import type { ShippingAddress, ShippingMethod } from "@/hooks/useCheckout"
 
 export interface CheckoutOrderItem {
@@ -122,7 +123,11 @@ export async function createCheckoutOrder(
     imagen_producto: null as string | null,
     cantidad:        item.quantity,
     precio_unitario: item.unitPriceEur,
-    precio_total:    (item.unitPriceEur - item.discountEur) * item.quantity,
+    // En céntimos: la multiplicación float en euros puede persistir en la BD
+    // valores tipo 89.97000000000001
+    precio_total:    centsToEuros(
+      (eurosToCents(item.unitPriceEur) - eurosToCents(item.discountEur)) * item.quantity
+    ),
     unidades_stock:  item.unidadesStock,
   }))
 

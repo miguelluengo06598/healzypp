@@ -7,6 +7,7 @@ import type { CartItem } from "@/lib/features/carts/cartsSlice"
 import type { CouponState, ShippingMethod } from "@/hooks/useCheckout"
 import CouponInput from "./CouponInput"
 import { FREE_SHIPPING_THRESHOLD_EUR } from "@/lib/shipping"
+import { eurosToCents, centsToEuros } from "@/lib/money"
 
 interface CartOrderSummaryProps {
   items: CartItem[]
@@ -22,12 +23,14 @@ function fmtEur(n: number) {
   return n.toFixed(2).replace(".", ",") + "€"
 }
 
+// En céntimos: el Math.round en euros de antes convertía 49,99€ en 50€
 function calcItemAdjustedPrice(item: CartItem): number {
+  const priceCents = eurosToCents(item.price)
   if (item.discount.percentage > 0) {
-    return Math.round(item.price * (1 - item.discount.percentage / 100))
+    return centsToEuros(Math.round(priceCents * (1 - item.discount.percentage / 100)))
   }
   if (item.discount.amount > 0) {
-    return Math.round(item.price - item.discount.amount)
+    return centsToEuros(priceCents - eurosToCents(item.discount.amount))
   }
   return item.price
 }
@@ -47,9 +50,14 @@ export default function CartOrderSummary({
   const shippingIsFree =
     shippingMethod?.id === "standard" && subtotalEur >= FREE_SHIPPING_THRESHOLD_EUR
 
-  const totalEur = Math.max(
-    0,
-    subtotalEur - couponDiscountEur + (shippingCostEur ?? 0)
+  // Aritmética en céntimos para que la suma no arrastre decimales binarios
+  const totalEur = centsToEuros(
+    Math.max(
+      0,
+      eurosToCents(subtotalEur) -
+        eurosToCents(couponDiscountEur) +
+        eurosToCents(shippingCostEur ?? 0)
+    )
   )
 
   return (
@@ -107,7 +115,7 @@ export default function CartOrderSummary({
                   )}
                 </div>
                 <span className="text-sm font-semibold text-black shrink-0">
-                  {fmtEur(adjPrice * item.quantity)}
+                  {fmtEur(centsToEuros(eurosToCents(adjPrice) * item.quantity))}
                 </span>
               </div>
             )

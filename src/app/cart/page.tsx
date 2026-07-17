@@ -12,12 +12,14 @@ import { TbBasketExclamation } from "react-icons/tb";
 import React from "react";
 import { RootState } from "@/lib/store";
 import { useAppSelector } from "@/lib/hooks/redux";
+import { formatEur } from "@/lib/money";
 import Link from "next/link";
 
 export default function CartPage() {
   const { cart, totalPrice, adjustedTotalPrice } = useAppSelector(
     (state: RootState) => state.carts
   );
+  const discountEur = totalPrice - adjustedTotalPrice;
 
   return (
     <main>
@@ -51,20 +53,20 @@ export default function CartPage() {
                 <div className="flex flex-col space-y-5">
                   <div className="flex items-center justify-between">
                     <span className="md:text-xl text-black/60">Subtotal</span>
-                    <span className="md:text-xl font-bold">€{totalPrice}</span>
+                    <span className="md:text-xl font-bold">{formatEur(totalPrice)}</span>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="md:text-xl text-black/60">
-                      Descuento (-
-                      {Math.round(
-                        ((totalPrice - adjustedTotalPrice) / totalPrice) * 100
-                      )}
-                      %)
-                    </span>
-                    <span className="md:text-xl font-bold text-red-600">
-                      -€{Math.round(totalPrice - adjustedTotalPrice)}
-                    </span>
-                  </div>
+                  {discountEur > 0 && (
+                    <div className="flex items-center justify-between">
+                      <span className="md:text-xl text-black/60">
+                        Descuento (-
+                        {Math.round((discountEur / totalPrice) * 100)}
+                        %)
+                      </span>
+                      <span className="md:text-xl font-bold text-red-600">
+                        -{formatEur(discountEur)}
+                      </span>
+                    </div>
+                  )}
                   <div className="flex items-center justify-between">
                     <span className="md:text-xl text-black/60">
                       Gastos de Envío
@@ -75,7 +77,7 @@ export default function CartPage() {
                   <div className="flex items-center justify-between">
                     <span className="md:text-xl text-black">Total</span>
                     <span className="text-xl md:text-2xl font-bold">
-                      €{Math.round(adjustedTotalPrice)}
+                      {formatEur(adjustedTotalPrice)}
                     </span>
                   </div>
                 </div>

@@ -51,7 +51,9 @@ function fmtEur(n: number) {
 
 function calcItemPrice(item: OrderItem): number {
   if (item.discount > 0) {
-    return item.price * (1 - item.discount / 100)
+    // En céntimos para no mostrar restos de float (p. ej. 44.991000000000004)
+    const priceCents = Math.round(item.price * 100)
+    return Math.round(priceCents * (1 - item.discount / 100)) / 100
   }
   return item.price
 }

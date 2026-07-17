@@ -8,6 +8,7 @@ import { paymentIntentRatelimit, getClientIp } from "@/lib/rate-limit"
 import { isTrustedOrigin } from "@/lib/security/origin-check"
 import { getCurrentUserId } from "@/lib/supabase-server"
 import { createServiceClient } from "@/lib/supabase"
+import { eurosToCents, centsToEuros } from "@/lib/money"
 import type { ShippingAddress, ShippingMethod } from "@/hooks/useCheckout"
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
@@ -65,7 +66,6 @@ async function getVerifiedItemPrice(
 ): Promise<{
   unitPriceEur: number
   discountEur: number
-  totalEur: number
   title: string
   productId: string
   unidadesStock: number
@@ -105,7 +105,6 @@ async function getVerifiedItemPrice(
   return {
     unitPriceEur,
     discountEur: 0,
-    totalEur: unitPriceEur * quantity,
     title: `${productRow.nombre} — ${mockBundle.name}`,
     productId: productRow.id,
     unidadesStock: bundleRow.cantidad * quantity,
@@ -168,7 +167,9 @@ export async function POST(req: NextRequest) {
     unidadesStock: number
   }> = []
 
-  let subtotalEur = 0
+  // Todo el cálculo monetario en CÉNTIMOS (enteros) — sumar euros float
+  // arrastra error binario; el amount de Stripe debe ser un entero limpio.
+  let subtotalCents = 0
 
   // Stock necesario acumulado por producto real (UUID de Supabase), para
   // soportar varias líneas del carrito que apunten al mismo producto con
@@ -192,7 +193,7 @@ export async function POST(req: NextRequest) {
       discountEur: verified.discountEur,
       unidadesStock: verified.unidadesStock,
     })
-    subtotalEur += verified.totalEur
+    subtotalCents += eurosToCents(verified.unitPriceEur) * item.quantity
 
     stockNeededByProduct.set(
       verified.productId,
@@ -213,13 +214,14 @@ export async function POST(req: NextRequest) {
   }
 
   // Calculate shipping (free if subtotal >= threshold)
-  const shippingCostEur =
-    shippingMethodId === "standard" && subtotalEur >= FREE_SHIPPING_THRESHOLD_EUR
+  const shippingCostCents =
+    shippingMethodId === "standard" &&
+    subtotalCents >= eurosToCents(FREE_SHIPPING_THRESHOLD_EUR)
       ? 0
-      : shippingOption.basePrice
+      : eurosToCents(shippingOption.basePrice)
 
   // W3: Revalidar cupón en servidor — nunca confiar en el importe del cliente
-  let safeCouponDiscount = 0
+  let safeCouponDiscountCents = 0
   if (couponCode) {
     try {
       const db = createServiceClient()
@@ -233,12 +235,14 @@ export async function POST(req: NextRequest) {
       if (couponData) {
         const isExpired = couponData.expires_at && new Date(couponData.expires_at) < new Date()
         const isMaxed = couponData.max_uses !== null && couponData.current_uses >= couponData.max_uses
-        const meetsMin = couponData.minimum_order_eur === null || subtotalEur >= couponData.minimum_order_eur
+        const meetsMin =
+          couponData.minimum_order_eur === null ||
+          subtotalCents >= eurosToCents(couponData.minimum_order_eur)
 
         if (!isExpired && !isMaxed && meetsMin) {
-          safeCouponDiscount = couponData.type === 'fixed'
-            ? Math.min(couponData.value, subtotalEur)
-            : Math.round(subtotalEur * couponData.value / 100 * 100) / 100
+          safeCouponDiscountCents = couponData.type === 'fixed'
+            ? Math.min(eurosToCents(couponData.value), subtotalCents)
+            : Math.round(subtotalCents * couponData.value / 100)
         }
       }
     } catch (err) {
@@ -246,8 +250,12 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const totalEur = Math.max(0, subtotalEur - safeCouponDiscount + shippingCostEur)
-  const totalCents = Math.round(totalEur * 100)
+  // Enteros de céntimos de punta a punta — totalCents es el amount de Stripe
+  const totalCents = Math.max(0, subtotalCents - safeCouponDiscountCents + shippingCostCents)
+  const subtotalEur = centsToEuros(subtotalCents)
+  const safeCouponDiscount = centsToEuros(safeCouponDiscountCents)
+  const shippingCostEur = centsToEuros(shippingCostCents)
+  const totalEur = centsToEuros(totalCents)
 
   if (totalCents < 50) {
     return NextResponse.json({ error: "El importe mínimo del pedido es 0,50€." }, { status: 400 })

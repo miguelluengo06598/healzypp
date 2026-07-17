@@ -1,20 +1,19 @@
 import { compareArrays } from "@/lib/utils";
+import { eurosToCents, centsToEuros } from "@/lib/money";
 import { Discount } from "@/types/product.types";
 import { createSlice } from "@reduxjs/toolkit";
 import type { PayloadAction } from "@reduxjs/toolkit";
 
-const calcAdjustedTotalPrice = (
-  totalPrice: number,
-  data: CartItem,
-  quantity?: number
-): number => {
-  return (
-    (totalPrice + data.discount.percentage > 0
-      ? Math.round(data.price - (data.price * data.discount.percentage) / 100)
-      : data.discount.amount > 0
-      ? Math.round(data.price - data.discount.amount)
-      : data.price) * (quantity ? quantity : data.quantity)
-  );
+/** Precio unitario con descuento aplicado, en céntimos (entero, sin drift). */
+const itemAdjustedUnitCents = (item: CartItem): number => {
+  const priceCents = eurosToCents(item.price);
+  if (item.discount.percentage > 0) {
+    return Math.round(priceCents * (1 - item.discount.percentage / 100));
+  }
+  if (item.discount.amount > 0) {
+    return priceCents - eurosToCents(item.discount.amount);
+  }
+  return priceCents;
 };
 
 export type RemoveCartItem = {
@@ -53,6 +52,22 @@ const initialState: CartsState = {
   action: null,
 };
 
+// Los totales se recalculan SIEMPRE desde los items, sumando en céntimos
+// (enteros) y convirtiendo a euros solo al final. El acumulado incremental
+// anterior (state.totalPrice + price * qty en float) producía valores tipo
+// 49.98999999999999 que llegaban crudos a la UI.
+const recomputeTotals = (state: CartsState) => {
+  const items = state.cart?.items ?? [];
+  let totalCents = 0;
+  let adjustedCents = 0;
+  for (const item of items) {
+    totalCents += eurosToCents(item.price) * item.quantity;
+    adjustedCents += itemAdjustedUnitCents(item) * item.quantity;
+  }
+  state.totalPrice = centsToEuros(totalCents);
+  state.adjustedTotalPrice = centsToEuros(adjustedCents);
+};
+
 export const cartsSlice = createSlice({
   name: "carts",
   // `createSlice` will infer the state type from the `initialState` argument
@@ -65,11 +80,7 @@ export const cartsSlice = createSlice({
           items: [action.payload],
           totalQuantities: action.payload.quantity,
         };
-        state.totalPrice =
-          state.totalPrice + action.payload.price * action.payload.quantity;
-        state.adjustedTotalPrice =
-          state.adjustedTotalPrice +
-          calcAdjustedTotalPrice(state.totalPrice, action.payload);
+        recomputeTotals(state);
         return;
       }
 
@@ -101,11 +112,7 @@ export const cartsSlice = createSlice({
           }),
           totalQuantities: state.cart.totalQuantities + action.payload.quantity,
         };
-        state.totalPrice =
-          state.totalPrice + action.payload.price * action.payload.quantity;
-        state.adjustedTotalPrice =
-          state.adjustedTotalPrice +
-          calcAdjustedTotalPrice(state.totalPrice, action.payload);
+        recomputeTotals(state);
         return;
       }
 
@@ -114,11 +121,7 @@ export const cartsSlice = createSlice({
         items: [...state.cart.items, action.payload],
         totalQuantities: state.cart.totalQuantities + action.payload.quantity,
       };
-      state.totalPrice =
-        state.totalPrice + action.payload.price * action.payload.quantity;
-      state.adjustedTotalPrice =
-        state.adjustedTotalPrice +
-        calcAdjustedTotalPrice(state.totalPrice, action.payload);
+      recomputeTotals(state);
     },
     removeCartItem: (state, action: PayloadAction<RemoveCartItem>) => {
       if (state.cart === null) return;
@@ -153,11 +156,7 @@ export const cartsSlice = createSlice({
             .filter((item) => item.quantity > 0),
           totalQuantities: state.cart.totalQuantities - 1,
         };
-
-        state.totalPrice = state.totalPrice - isItemInCart.price * 1;
-        state.adjustedTotalPrice =
-          state.adjustedTotalPrice -
-          calcAdjustedTotalPrice(isItemInCart.price, isItemInCart, 1);
+        recomputeTotals(state);
       }
     },
     remove: (
@@ -184,15 +183,7 @@ export const cartsSlice = createSlice({
         }),
         totalQuantities: state.cart.totalQuantities - isItemInCart.quantity,
       };
-      state.totalPrice =
-        state.totalPrice - isItemInCart.price * isItemInCart.quantity;
-      state.adjustedTotalPrice =
-        state.adjustedTotalPrice -
-        calcAdjustedTotalPrice(
-          isItemInCart.price,
-          isItemInCart,
-          isItemInCart.quantity
-        );
+      recomputeTotals(state);
     },
     clearCart: (state) => {
       state.cart = null;
