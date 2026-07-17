@@ -100,8 +100,8 @@ const ModalImageGallery: React.FC<{ product: Product }> = ({ product }) => {
 
   return (
     <div className="flex flex-col gap-3">
-      {/* Main image */}
-      <div className="relative aspect-square bg-[#F0EEED] rounded-[16px] sm:rounded-[20px] overflow-hidden group">
+      {/* Main image — 4:3 en móvil para dejar sitio al contenido de compra */}
+      <div className="relative aspect-[4/3] sm:aspect-square bg-[#F0EEED] rounded-[16px] sm:rounded-[20px] overflow-hidden group">
         <AnimatePresence mode="wait">
           <motion.div
             key={selected}
@@ -125,17 +125,19 @@ const ModalImageGallery: React.FC<{ product: Product }> = ({ product }) => {
         {/* Nav arrows */}
         {images.length > 1 && (
           <>
+            {/* En táctil no hay hover: las flechas van siempre visibles y solo
+                en md+ se ocultan hasta el hover */}
             <button
               onClick={goPrev}
               aria-label="Imagen anterior"
-              className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white/80 backdrop-blur-sm shadow flex items-center justify-center opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
+              className="absolute left-2 top-1/2 -translate-y-1/2 w-10 h-10 md:w-9 md:h-9 rounded-full bg-white/90 backdrop-blur-sm shadow flex items-center justify-center md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
             <button
               onClick={goNext}
               aria-label="Imagen siguiente"
-              className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white/80 backdrop-blur-sm shadow flex items-center justify-center opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
+              className="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 md:w-9 md:h-9 rounded-full bg-white/90 backdrop-blur-sm shadow flex items-center justify-center md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
             >
               <ChevronRight className="w-4 h-4" />
             </button>
@@ -220,16 +222,10 @@ const QuickProductPreviewModal: React.FC = () => {
   /* Bundle state — same as PDP */
   const [selectedBundleIdx, setSelectedBundleIdx] = useState(1); // default 2 packs (popular)
 
-  /* Color state (kept for products that have colors) */
-  const [selectedColor, setSelectedColor] = useState(
-    selectedProduct?.colors?.[0]?.name ?? ""
-  );
-
-  /* Reset states when product changes */
+  /* Reset state when product changes */
   useEffect(() => {
     if (selectedProduct) {
       setSelectedBundleIdx(1);
-      setSelectedColor(selectedProduct.colors?.[0]?.name ?? "");
     }
   }, [selectedProduct?.id]);
 
@@ -254,20 +250,13 @@ const QuickProductPreviewModal: React.FC = () => {
         name: `${selectedProduct.title} — ${selectedBundle.name}`,
         srcUrl: selectedProduct.srcUrl,
         price: bundlePrice,
-        attributes: [selectedBundle.name, selectedColor].filter(Boolean),
+        attributes: [selectedBundle.name],
         discount: { amount: 0, percentage: 0 },
         quantity: 1,
       })
     );
     closePreview();
-  }, [
-    dispatch,
-    selectedProduct,
-    selectedBundle,
-    selectedColor,
-    bundlePrice,
-    closePreview,
-  ]);
+  }, [dispatch, selectedProduct, selectedBundle, bundlePrice, closePreview]);
 
   if (!selectedProduct) return null;
 
@@ -275,12 +264,18 @@ const QuickProductPreviewModal: React.FC = () => {
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && closePreview()}>
+      {/* Móvil: bottom-sheet a ancho completo con cuerpo scrolleable y CTA
+          sticky. Desktop (md+): modal centrado de altura fija donde cada
+          columna scrollea por su cuenta y la imagen queda siempre a la vista. */}
       <DialogContent
         showClose={false}
         className={cn(
-          "w-full max-w-[95vw] sm:max-w-2xl md:max-w-3xl lg:max-w-4xl",
-          "p-0 border-none overflow-hidden bg-white",
-          "max-h-[92vh] md:max-h-[85vh]"
+          "w-full max-w-none md:max-w-[min(92vw,48rem)] lg:max-w-4xl",
+          "p-0 gap-0 border-none bg-white",
+          "self-end md:self-center",
+          "rounded-t-[20px] rounded-b-none md:rounded-[24px] md:rounded-b-[24px]",
+          "max-h-[92dvh] md:max-h-none md:h-[min(85vh,760px)] md:overflow-hidden",
+          "data-[state=open]:slide-in-from-bottom-8 md:data-[state=open]:slide-in-from-bottom-0"
         )}
       >
         <DialogTitle className="sr-only">{product.title}</DialogTitle>
@@ -291,19 +286,24 @@ const QuickProductPreviewModal: React.FC = () => {
         {/* Close button */}
         <button
           onClick={closePreview}
-          className="absolute right-3 top-3 z-50 w-9 h-9 rounded-full bg-white/90 backdrop-blur-sm shadow flex items-center justify-center text-black/60 hover:text-black transition-colors"
+          className="absolute right-3 top-3 z-50 w-10 h-10 rounded-full bg-white/90 backdrop-blur-sm shadow flex items-center justify-center text-black/60 hover:text-black transition-colors"
           aria-label="Cerrar"
         >
           <X className="w-4 h-4" />
         </button>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 h-full overflow-y-auto">
+        {/* Asa visual del bottom-sheet (solo móvil) */}
+        <div className="md:hidden pt-2.5 flex justify-center">
+          <div className="w-10 h-1 rounded-full bg-black/15" />
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 md:h-full min-h-0">
           {/* ---------- LEFT: Image ---------- */}
           <motion.div
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={SPRING_SOFT}
-            className="p-4 sm:p-6 bg-[#F8F8F8] md:bg-white"
+            className="p-4 sm:p-6 bg-[#F8F8F8] md:bg-white md:overflow-y-auto min-h-0"
           >
             <ModalImageGallery product={product} />
           </motion.div>
@@ -313,7 +313,7 @@ const QuickProductPreviewModal: React.FC = () => {
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ ...SPRING_SOFT, delay: 0.1 }}
-            className="p-5 sm:p-6 md:p-8 flex flex-col overflow-y-auto"
+            className="p-5 pt-4 sm:p-6 md:p-8 md:pt-8 flex flex-col md:overflow-y-auto min-h-0"
           >
             {/* Badge */}
             {product.badge && (
@@ -491,34 +491,33 @@ const QuickProductPreviewModal: React.FC = () => {
               </motion.div>
             </AnimatePresence>
 
-            {/* Variants: Colors */}
-            {product.colors && product.colors.length > 0 && (
-              <div className="mb-4">
-                <span className="text-xs font-semibold text-black/60 uppercase tracking-wide block mb-2">
-                  Color
-                </span>
-                <div className="flex gap-2">
-                  {product.colors.map((c) => (
-                    <button
-                      key={c.name}
-                      onClick={() => setSelectedColor(c.name)}
-                      className={cn(
-                        "w-8 h-8 rounded-full border-2 transition-all hover:scale-110",
-                        c.code,
-                        selectedColor === c.name
-                          ? "border-brand ring-2 ring-brand/30"
-                          : "border-transparent"
-                      )}
-                      title={c.name}
-                      aria-label={c.name}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
+            {/* Link to full page */}
+            <Link
+              href={productPath(product.id, product.title)}
+              onClick={closePreview}
+              className="inline-flex items-center min-h-11 lg:min-h-0 text-sm text-brand font-medium hover:underline mb-2 lg:mb-4 w-fit"
+            >
+              Ver detalles completos →
+            </Link>
 
-            {/* Actions */}
-            <div className="flex items-center gap-3 mb-5">
+            {/* Trust badges */}
+            <div className="mt-auto pt-4 border-t border-black/10 flex items-center justify-around">
+              {TRUST_BADGES.map((badge) => (
+                <div
+                  key={badge.label}
+                  className="flex flex-col items-center gap-1 text-black/50"
+                >
+                  <badge.icon className="w-5 h-5" />
+                  <span className="text-[10px] font-medium text-center leading-tight">
+                    {badge.label}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            {/* Actions — sticky: pegado al borde inferior del sheet en móvil y
+                del panel derecho en desktop, siempre a mano sin scroll */}
+            <div className="sticky bottom-0 z-10 bg-white -mx-5 px-5 sm:-mx-6 sm:px-6 md:-mx-8 md:px-8 pt-3 pb-4 md:pb-2 mt-4 flex items-center gap-3 [box-shadow:0_-10px_16px_-12px_rgba(0,0,0,0.15)]">
               <motion.div
                 className="flex-1"
                 whileTap={{ scale: 0.97 }}
@@ -538,7 +537,7 @@ const QuickProductPreviewModal: React.FC = () => {
                 transition={SPRING_SNAPPY}
                 onClick={toggleWishlist}
                 className={cn(
-                  "w-11 h-11 rounded-full border flex items-center justify-center transition-colors",
+                  "w-11 h-11 rounded-full border flex items-center justify-center transition-colors shrink-0",
                   isWishlisted
                     ? "bg-red-50 border-red-200 text-red-500"
                     : "border-black/10 text-black/40 hover:text-red-500 hover:border-red-200"
@@ -552,30 +551,6 @@ const QuickProductPreviewModal: React.FC = () => {
                   )}
                 />
               </motion.button>
-            </div>
-
-            {/* Link to full page */}
-            <Link
-              href={productPath(product.id, product.title)}
-              onClick={closePreview}
-              className="text-sm text-brand font-medium hover:underline mb-5 w-fit"
-            >
-              Ver detalles completos →
-            </Link>
-
-            {/* Trust badges */}
-            <div className="mt-auto pt-4 border-t border-black/10 flex items-center justify-around">
-              {TRUST_BADGES.map((badge) => (
-                <div
-                  key={badge.label}
-                  className="flex flex-col items-center gap-1 text-black/50"
-                >
-                  <badge.icon className="w-5 h-5" />
-                  <span className="text-[10px] font-medium text-center leading-tight">
-                    {badge.label}
-                  </span>
-                </div>
-              ))}
             </div>
           </motion.div>
         </div>

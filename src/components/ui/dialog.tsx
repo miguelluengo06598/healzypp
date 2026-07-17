@@ -45,7 +45,8 @@ const DialogContent = React.forwardRef<
       <DialogPrimitive.Content
         ref={ref}
         className={cn(
-          "grid w-full max-w-lg gap-4 border bg-background p-0 shadow-2xl duration-200",
+          // relative: ancla los botones absolute (cerrar) al modal, no al viewport
+          "relative grid w-full max-w-lg gap-4 border bg-background p-0 shadow-2xl duration-200",
           "data-[state=open]:animate-in data-[state=closed]:animate-out",
           "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
           "sm:rounded-[20px] md:rounded-[24px]",
