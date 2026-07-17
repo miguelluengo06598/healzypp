@@ -1,8 +1,9 @@
 -- ============================================================================
 -- Migración: insert atómico de order_items + order_tracking (Fase 3, FIX 4
 -- de audit-full.md)
--- Ejecutar manualmente en el SQL Editor de Supabase — NO se ha ejecutado
--- automáticamente contra producción.
+-- Estado: ⏸ PROPUESTA, NO aplicada en Supabase (a diferencia de 0001 y 0002,
+-- que sí están aplicadas). El código actual NO la usa — ver
+-- docs/propuesta-migracion-0003-order-items-tracking.md antes de decidir.
 --
 -- Motivo: al paralelizar los inserts de createOrder() con Promise.all, un
 -- fallo de red en el insert de order_items (excepción, no {error} devuelto)

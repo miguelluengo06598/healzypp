@@ -1,7 +1,7 @@
 -- ============================================================================
 -- Migración: añadir 'fallido' a order_status_enum (Fase 1, FIX 3 de audit-full.md)
--- Ejecutar manualmente en el SQL Editor de Supabase — NO se ha ejecutado
--- automáticamente contra producción.
+-- Estado: ✅ APLICADA en Supabase de producción (ejecutada manualmente en el
+-- SQL Editor; confirmado por el usuario el 2026-07-17). No re-ejecutar.
 --
 -- Motivo: updateOrderPaymentStatus() (src/lib/db/orders.ts) pone
 -- estado = 'fallido' cuando Stripe emite payment_intent.payment_failed,

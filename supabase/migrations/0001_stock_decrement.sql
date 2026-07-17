@@ -1,7 +1,7 @@
 -- ============================================================================
 -- Migración: decremento atómico de stock (Fase 1, FIX 2 de audit-full.md)
--- Ejecutar manualmente en el SQL Editor de Supabase — NO se ha ejecutado
--- automáticamente contra producción.
+-- Estado: ✅ APLICADA en Supabase de producción (ejecutada manualmente en el
+-- SQL Editor; confirmado por el usuario el 2026-07-17). No re-ejecutar.
 --
 -- Objetos que añade:
 --   1. order_items.unidades_stock — botes reales que consume cada línea de
