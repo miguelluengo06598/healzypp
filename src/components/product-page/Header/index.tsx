@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import Rating from "@/components/ui/Rating";
 import { FaCheck } from "react-icons/fa";
 // Cambio: ColorSelection y SizeSelection reemplazados por BundleSelection
-import BundleSelection from "./BundleSelection";
+import BundleSelection from "@/sections/BundleSelection";
 import DeliveryTimeline from "@/sections/DeliveryTimeline";
 import CheckoutActions from "./CheckoutActions";
 

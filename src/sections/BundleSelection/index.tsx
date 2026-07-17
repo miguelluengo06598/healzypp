@@ -4,29 +4,21 @@ import React, { useEffect, useState, useCallback } from "react";
 import { cn } from "@/lib/utils";
 import {
   BUNDLES,
-  Bundle,
+  BASE_UNIT_PRICE_EUR,
   calcSavings,
   calcDiscountPct,
   calcUnitPrice,
   formatPriceEur,
 } from "@/lib/bundles";
-
-const BASE_UNIT_PRICE_EUR = 29.99;
-type BundleId = Bundle["id"];
-
-function getBundleTitle(bundle: Bundle): string {
-  if (bundle.id === 1) return "1 Bote — Pruébalo";
-  if (bundle.id === 2) return "2 Botes — Lo más vendido ⭐";
-  if (bundle.id === 3) return "3 Botes — Mejor precio 🏆";
-  return bundle.name;
-}
+import { getBundleTitle, SELECTED_BUNDLE_STORAGE_KEY } from "./data";
+import type { BundleId } from "./types";
 
 const BundleSelection = () => {
   const [selected, setSelected] = useState<BundleId>(2);
   const [bounceId, setBounceId] = useState<number | null>(null);
 
   useEffect(() => {
-    localStorage.setItem("selectedBundle", JSON.stringify({ id: selected }));
+    localStorage.setItem(SELECTED_BUNDLE_STORAGE_KEY, JSON.stringify({ id: selected }));
   }, [selected]);
 
   const handleSelect = useCallback((id: number) => {
