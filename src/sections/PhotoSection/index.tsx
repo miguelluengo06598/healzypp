@@ -1,10 +1,10 @@
 "use client";
 
-import { Product } from "@/types/product.types";
 import Image from "next/image";
 import React, { useState } from "react";
+import type { PhotoSectionProps } from "./types";
 
-const PhotoSection = ({ data }: { data: Product }) => {
+const PhotoSection = ({ data }: PhotoSectionProps) => {
   // -1 = imagen de portada (data.srcUrl), no necesariamente presente en data.gallery
   const [selectedIndex, setSelectedIndex] = useState<number>(-1);
   const selected =
