@@ -4,11 +4,11 @@ import React, { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { CreditCard } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Product } from "@/types/product.types";
 import { getStoredBundle, type Bundle } from "@/components/checkout/OrderSummary";
 import { useMetaPixel } from "@/hooks/useMetaPixel";
 import { useScrollDirection } from "@/hooks/useScrollDirection";
 import dynamic from "next/dynamic";
+import type { CheckoutActionsProps } from "./types";
 
 // Lazy-load: mismo patrón que StickySmartCart — el chunk de CheckoutModal
 // (Stripe.js, react-hook-form) no se descarga hasta que el usuario pulsa
@@ -17,10 +17,6 @@ const CheckoutModal = dynamic(
   () => import("@/components/checkout/CheckoutModal"),
   { ssr: false }
 );
-
-interface CheckoutActionsProps {
-  data: Product;
-}
 
 const CheckoutActions: React.FC<CheckoutActionsProps> = ({ data }) => {
   const [bundle, setBundle] = useState<Bundle | null>(null);

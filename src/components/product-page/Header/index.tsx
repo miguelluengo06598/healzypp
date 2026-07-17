@@ -8,7 +8,7 @@ import { FaCheck } from "react-icons/fa";
 // Cambio: ColorSelection y SizeSelection reemplazados por BundleSelection
 import BundleSelection from "@/sections/BundleSelection";
 import DeliveryTimeline from "@/sections/DeliveryTimeline";
-import CheckoutActions from "./CheckoutActions";
+import CheckoutActions from "@/sections/CheckoutActions";
 
 const BENEFIT_BUBBLES = [
   "Con vinagre de manzana",
