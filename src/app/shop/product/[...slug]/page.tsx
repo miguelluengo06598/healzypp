@@ -3,7 +3,7 @@ import { newArrivalsData, relatedProductData } from "@/data/products";
 import ProductListSec from "@/sections/ProductListSec";
 import ProductCard from "@/components/common/ProductCard";
 import BreadcrumbProduct from "@/sections/Breadcrumbs/BreadcrumbProduct";
-import Header from "@/components/product-page/Header";
+import ProductHeader from "@/sections/ProductHeader";
 import ProductSections from "@/sections/ProductSections";
 import ProductPageTracker from "@/components/tracking/ProductPageTracker";
 import ProductMetaTracker from "@/components/tracking/ProductMetaTracker";
@@ -168,7 +168,7 @@ export default async function ProductPage({
           <hr className="h-[1px] border-t-black/10 mb-5 sm:mb-6" />
           <BreadcrumbProduct title={productData?.title ?? "product"} />
           <section className="mb-11">
-            <Header data={productData} />
+            <ProductHeader data={productData} />
           </section>
         </div>
       </ProductSectionWrapper>

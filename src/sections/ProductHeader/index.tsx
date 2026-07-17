@@ -1,6 +1,5 @@
 import React from "react";
 import PhotoSection from "@/sections/PhotoSection";
-import { Product } from "@/types/product.types";
 import { integralCF } from "@/styles/fonts";
 import { cn } from "@/lib/utils";
 import Rating from "@/components/ui/Rating";
@@ -9,17 +8,13 @@ import { FaCheck } from "react-icons/fa";
 import BundleSelection from "@/sections/BundleSelection";
 import DeliveryTimeline from "@/sections/DeliveryTimeline";
 import CheckoutActions from "@/sections/CheckoutActions";
+import { defaultBenefitBubbles } from "./data";
+import type { ProductHeaderProps } from "./types";
 
-const BENEFIT_BUBBLES = [
-  "Con vinagre de manzana",
-  "100% veganas",
-  "Sin azúcares añadidos",
-  "Favorece la digestión",
-  "Apoya el bienestar",
-  "Sabor delicioso",
-];
-
-const Header = ({ data }: { data: Product }) => {
+const ProductHeader = ({
+  data,
+  benefitBubbles = defaultBenefitBubbles,
+}: ProductHeaderProps) => {
   return (
     <>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -53,7 +48,7 @@ const Header = ({ data }: { data: Product }) => {
           )}
           {/* Benefit bubbles — replace description paragraph */}
           <div className="flex flex-wrap gap-2 mb-5">
-            {BENEFIT_BUBBLES.map((benefit) => (
+            {benefitBubbles.map((benefit) => (
               <span
                 key={benefit}
                 className="inline-flex items-center gap-1.5 rounded-full bg-[#F0F4EC] border border-[#487D26]/25 text-black/75 text-xs sm:text-sm font-medium px-3.5 py-1.5"
@@ -78,4 +73,4 @@ const Header = ({ data }: { data: Product }) => {
   );
 };
 
-export default Header;
+export default ProductHeader;
