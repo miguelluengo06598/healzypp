@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { Product } from "@/types/product.types";
 import { getStoredBundle, type Bundle } from "@/components/checkout/OrderSummary";
 import { useMetaPixel } from "@/hooks/useMetaPixel";
+import { useScrollDirection } from "@/hooks/useScrollDirection";
 import dynamic from "next/dynamic";
 
 // Lazy-load: mismo patrón que StickySmartCart — el chunk de CheckoutModal
@@ -26,6 +27,11 @@ const CheckoutActions: React.FC<CheckoutActionsProps> = ({ data }) => {
   const [modalOpen, setModalOpen] = useState(false);
   const [modalMounted, setModalMounted] = useState(false);
   const { trackAddToCart, trackInitiateCheckout } = useMetaPixel();
+  // MobileBottomNavigation (72px, z-50) vive en bottom-0 y se oculta al bajar;
+  // esta barra lee la misma señal de scroll para apilarse encima cuando el nav
+  // es visible y bajar a bottom-0 cuando se esconde — sin solaparse nunca.
+  const scrollDir = useScrollDirection();
+  const navVisible = scrollDir !== "down";
 
   useEffect(() => {
     setBundle(getStoredBundle());
@@ -79,7 +85,12 @@ const CheckoutActions: React.FC<CheckoutActionsProps> = ({ data }) => {
       </div>
 
       {/* Mobile: fixed bottom bar */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-black/5 p-4 z-40 flex flex-col gap-2.5">
+      <div
+        className={cn(
+          "md:hidden fixed left-0 right-0 bg-white border-t border-black/5 p-4 z-40 flex flex-col gap-2.5 transition-[bottom] duration-300",
+          navVisible ? "bottom-[72px]" : "bottom-0"
+        )}
+      >
         <motion.button
           type="button"
           whileTap={{ scale: 0.97 }}

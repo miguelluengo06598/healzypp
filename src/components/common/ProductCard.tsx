@@ -214,7 +214,7 @@ const ProductCard = ({ data, imagePriority = false }: ProductCardProps) => {
         {/* ---------- Wishlist (top-right) ---------- */}
         <motion.button
           className={cn(
-            "absolute top-3 right-3 z-20 w-9 h-9 rounded-full flex items-center justify-center shadow-sm backdrop-blur-sm",
+            "absolute top-3 right-3 z-20 w-11 h-11 lg:w-9 lg:h-9 rounded-full flex items-center justify-center shadow-sm backdrop-blur-sm",
             "bg-white/90 hover:bg-white text-black/40 hover:text-red-500 transition-colors"
           )}
           onClick={toggleWishlist}
@@ -334,7 +334,8 @@ const ProductCard = ({ data, imagePriority = false }: ProductCardProps) => {
                     setSelectedPackIdx(idx);
                   }}
                   className={cn(
-                    "flex-1 text-[11px] sm:text-xs font-bold py-1.5 px-1 sm:px-2 rounded-full transition-all duration-200",
+                    // min-h-11: área táctil de 44px en móvil/tablet; compacto solo en desktop
+                    "flex-1 min-h-11 lg:min-h-0 text-[11px] sm:text-xs font-bold py-1.5 px-1 sm:px-2 rounded-full transition-all duration-200",
                     isActive
                       ? "bg-brand text-white shadow-sm"
                       : "bg-transparent text-black/60 hover:text-black hover:bg-black/5"
@@ -408,7 +409,7 @@ const ProductCard = ({ data, imagePriority = false }: ProductCardProps) => {
 
           <Link
             href={productSlug}
-            className="flex items-center justify-center gap-1 text-xs text-black/50 hover:text-brand font-medium transition-colors hover:underline"
+            className="flex items-center justify-center gap-1 min-h-11 lg:min-h-0 lg:py-1 text-xs text-black/50 hover:text-brand font-medium transition-colors hover:underline"
             onClick={(e) => e.stopPropagation()}
           >
             Ver producto completo

@@ -12,6 +12,7 @@ import { useAppSelector } from "@/lib/hooks/redux";
 import { RootState } from "@/lib/store";
 import { useAuthModal } from "@/components/auth/AuthModalContext";
 import { supabase } from "@/lib/supabase";
+import { useScrollDirection } from "@/hooks/useScrollDirection";
 
 /* ------------------------------------------------------------------ */
 /*  TYPES                                                              */
@@ -83,29 +84,6 @@ const useWishlistCount = () => {
   }, []);
 
   return count;
-};
-
-/* ------------------------------------------------------------------ */
-/*  HOOK: scroll direction                                             */
-/* ------------------------------------------------------------------ */
-
-const useScrollDirection = () => {
-  const [direction, setDirection] = useState<"up" | "down" | null>(null);
-  const lastY = useRef(0);
-
-  useEffect(() => {
-    const onScroll = () => {
-      const y = window.scrollY;
-      const diff = y - lastY.current;
-      if (Math.abs(diff) < 12) return;
-      setDirection(diff > 0 ? "down" : "up");
-      lastY.current = y;
-    };
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
-
-  return direction;
 };
 
 /* ------------------------------------------------------------------ */
