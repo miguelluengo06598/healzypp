@@ -1,5 +1,5 @@
 -- ============================================================================
--- SCHEMA COMPLETO HEALZYP — Supabase SQL Editor
+-- SCHEMA COMPLETO DE LA TIENDA — Supabase SQL Editor
 -- Ejecutar de arriba a abajo sin interrupciones.
 -- ============================================================================
 
