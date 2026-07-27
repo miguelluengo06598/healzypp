@@ -5,9 +5,9 @@
 
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { usePathname } from 'next/navigation'
-import { getTrackingClient, destroyTrackingClient } from '@/lib/tracking-client'
+import { getTrackingClient } from '@/lib/tracking-client'
 import {
   generateFingerprint,
   getDeviceType,
@@ -17,10 +17,9 @@ import {
   storeSessionId,
   isSessionExpired,
   hasConsent,
-  getCurrentUrl,
   getCurrentPath,
 } from '@/lib/tracking-utils'
-import type { TrackingSession, SessionStartInput } from '@/types/tracking.types'
+import type { TrackingSession } from '@/types/tracking.types'
 
 interface SessionTrackerOptions {
   userId?: string | null
@@ -30,71 +29,61 @@ interface SessionTrackerOptions {
 export function useSessionTracker(options: SessionTrackerOptions = {}) {
   const pathname = usePathname()
   const [ready, setReady] = useState(false)
-  const initializedRef = useRef(false)
 
   useEffect(() => {
-    if (initializedRef.current) return
-
     // No rastrear sin consentimiento explícito del usuario (GDPR/LOPD)
     if (!hasConsent()) {
-      initializedRef.current = true
       setReady(true)
       return
     }
 
-    initializedRef.current = true
-
     let cancelled = false
+    const client = getTrackingClient({ debug: options.debug ?? false })
 
-    async function init() {
-      const client = getTrackingClient({ debug: options.debug ?? false })
-      const existingId = getStoredSessionId()
-      const needsNewSession = !existingId || isSessionExpired(30 * 60 * 1000)
+    // ensureSession() es idempotente y se apoya en el estado real del
+    // cliente (this.session / this.initPromise dentro de TrackingClient),
+    // no en un ref de este componente — así, si React Strict Mode monta
+    // este efecto dos veces (desarrollo), el segundo montaje se engancha a
+    // la misma inicialización en curso en vez de arrancar una nueva sesión
+    // o quedarse bloqueado creyendo que "ya se inicializó" cuando en
+    // realidad la primera se abortó a medias. destroyTrackingClient() ya NO
+    // se llama en el cleanup: este provider vive en el layout raíz, así que
+    // en un navegador real el cleanup solo se dispara por el remount
+    // sintético de Strict Mode, nunca por un cierre real de la página
+    // (eso destruye todo el contexto JS igualmente).
+    client
+      .ensureSession(async () => {
+        const existingId = getStoredSessionId()
+        const needsNewSession = !existingId || isSessionExpired(30 * 60 * 1000)
+        const sessionId = needsNewSession ? crypto.randomUUID() : (existingId as string)
+        if (needsNewSession) storeSessionId(sessionId)
 
-      let sessionId = existingId ?? crypto.randomUUID()
-      if (needsNewSession) {
-        sessionId = crypto.randomUUID()
-        storeSessionId(sessionId)
-      }
+        const fingerprint = await generateFingerprint()
 
-      const fingerprint = await generateFingerprint()
-      const deviceInfo = getDeviceInfo()
-      const utms = getUtmParams()
+        const session: TrackingSession = {
+          id: sessionId,
+          user_id: options.userId ?? null,
+          fingerprint,
+          device_type: getDeviceType(),
+          device_info: getDeviceInfo(),
+          country: null, // Se rellena en el servidor por GeoIP
+          region: null,
+          city: null,
+          referrer: typeof document !== 'undefined' ? document.referrer : null,
+          landing_page: getCurrentPath(),
+          ...getUtmParams(),
+          consent_given: true,
+          created_at: new Date().toISOString(),
+        }
 
-      const session: TrackingSession = {
-        id: sessionId,
-        user_id: options.userId ?? null,
-        fingerprint,
-        device_type: getDeviceType(),
-        device_info: deviceInfo,
-        country: null, // Se rellena en el servidor por GeoIP
-        region: null,
-        city: null,
-        referrer: typeof document !== 'undefined' ? document.referrer : null,
-        landing_page: getCurrentPath(),
-        ...utms,
-        consent_given: true,
-        created_at: new Date().toISOString(),
-      }
-
-      client.setSession(session)
-      client.startHeartbeat()
-
-      // Enviar evento de inicio de sesión
-      const event: SessionStartInput = {
-        eventType: 'session_start',
-        url: getCurrentUrl(),
-      }
-      client.track(event)
-
-      if (!cancelled) setReady(true)
-    }
-
-    init()
+        return session
+      })
+      .then(() => {
+        if (!cancelled) setReady(true)
+      })
 
     return () => {
       cancelled = true
-      destroyTrackingClient()
     }
   }, [options.userId, options.debug])
 

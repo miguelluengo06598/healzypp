@@ -18,6 +18,7 @@ import {
   getQueuedEvents,
   clearQueue,
   generateEventId,
+  getCurrentUrl,
 } from './tracking-utils'
 
 // ─── Configuración por defecto ───────────────────────────────────────────────
@@ -51,6 +52,8 @@ export function destroyTrackingClient() {
 
 // ─── Cliente ─────────────────────────────────────────────────────────────────
 
+const MAX_PENDING_EVENTS = 20
+
 class TrackingClient {
   private config: TrackerConfig
   private session: TrackingSession | null = null
@@ -59,6 +62,8 @@ class TrackingClient {
   private heartbeatTimer: ReturnType<typeof setTimeout> | null = null
   private destroyed = false
   private beaconSent = false
+  private initPromise: Promise<void> | null = null
+  private pendingEvents: TrackingEventInput[] = []
 
   constructor(config?: Partial<TrackerConfig>) {
     this.config = { ...DEFAULT_CONFIG, ...config }
@@ -68,26 +73,82 @@ class TrackingClient {
 
   // ─── Config ────────────────────────────────────────────────────────────────
 
-  setSession(session: TrackingSession) {
-    this.session = session
-  }
-
   getSessionId(): string | null {
     return this.session?.id ?? null
+  }
+
+  hasSession(): boolean {
+    return this.session !== null
+  }
+
+  // ─── Inicialización de sesión ────────────────────────────────────────────────
+
+  /**
+   * Idempotente y segura de llamar varias veces (incluida la doble
+   * invocación de efectos de React Strict Mode en desarrollo): si ya hay
+   * sesión, no hace nada; si ya hay una inicialización en curso, se
+   * engancha a ESA MISMA promesa en vez de arrancar una segunda — nunca se
+   * crean dos sesiones ni se manda session_start dos veces por el mismo
+   * montaje lógico. Decide qué hacer mirando el estado real del cliente
+   * (this.session / this.initPromise), no un flag booleano externo.
+   */
+  async ensureSession(buildSession: () => Promise<TrackingSession>): Promise<void> {
+    if (this.session) return
+    if (this.initPromise) return this.initPromise
+
+    this.initPromise = (async () => {
+      const session = await buildSession()
+      if (this.destroyed) return // se destruyó de verdad mientras se construía
+
+      this.session = session
+      this.startHeartbeat()
+
+      // session_start primero (establece la sesión), luego los eventos que
+      // llegaron mientras se generaba el fingerprint (típicamente el
+      // page_view de la página de entrada, disparado por usePageTracker
+      // antes de que esto terminara) — sin este vaciado se perdería el
+      // primer page_view de cada sesión nueva.
+      this.enqueueForSend({ eventType: 'session_start', url: getCurrentUrl() } as TrackingEventInput)
+
+      const pending = this.pendingEvents
+      this.pendingEvents = []
+      for (const event of pending) {
+        this.enqueueForSend(event)
+      }
+    })()
+
+    try {
+      await this.initPromise
+    } finally {
+      this.initPromise = null
+    }
   }
 
   // ─── Envío de eventos ──────────────────────────────────────────────────────
 
   track(event: TrackingEventInput): void {
     if (this.destroyed) return
+
     if (!this.session) {
-      if (this.config.debug) console.warn('[Tracker] No hay sesión activa')
+      // Sin sesión todavía. Si hay una inicialización en curso, se encola
+      // para no perderlo — ensureSession() lo vacía en cuanto termine. Si
+      // NO hay inicialización en curso (p.ej. sin consentimiento todavía),
+      // no se encola nada: no hay garantía de que vaya a llegar sesión.
+      if (this.initPromise && this.pendingEvents.length < MAX_PENDING_EVENTS) {
+        this.pendingEvents.push(event)
+      } else if (this.config.debug) {
+        console.warn('[Tracker] Evento descartado: no hay sesión activa', event)
+      }
       return
     }
 
+    this.enqueueForSend(event)
+  }
+
+  private enqueueForSend(event: TrackingEventInput): void {
     const fullEvent: TrackingEvent = {
       ...event,
-      sessionId: this.session.id,
+      sessionId: this.session!.id,
       timestamp: Date.now(),
     } as TrackingEvent
 

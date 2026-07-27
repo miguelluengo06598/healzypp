@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createServiceClient } from '@/lib/supabase'
 import { trackRatelimit, getClientIp } from '@/lib/rate-limit'
+import { getStoreInstanceId } from '@/lib/store-instance'
 import type { TrackingEvent, TrackingSession } from '@/types/tracking.types'
 
 // ─── Zod schemas ─────────────────────────────────────────────────────────────
@@ -204,6 +205,16 @@ export async function POST(req: NextRequest) {
   const geoRegion  = req.headers.get('x-vercel-ip-country-region') ?? session.region ?? null
   const geoCity    = req.headers.get('x-vercel-ip-city') ?? session.city ?? null
 
+  // A diferencia de /api/dashboard/stats y /api/analytics/live, este
+  // endpoint lo llama el navegador de cualquier visitante real del sitio —
+  // fallar en duro (503) si falta STORE_INSTANCE_ID rompería el tracking de
+  // TODA la tienda por una variable mal puesta. Se escribe null (misma
+  // categoría que el histórico pre-migración) y se loggea, sin bloquear.
+  const instanceId = getStoreInstanceId()
+  if (!instanceId) {
+    console.error('[track] STORE_INSTANCE_ID no está configurado — la sesión se guardará sin instancia asignada')
+  }
+
   try {
     const supabase = createServiceClient()
 
@@ -228,6 +239,7 @@ export async function POST(req: NextRequest) {
           utm_content: session.utm_content,
           utm_term: session.utm_term,
           consent_given: session.consent_given,
+          store_instance_id: instanceId,
         },
         { onConflict: 'id' }
       )

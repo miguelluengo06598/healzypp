@@ -31,8 +31,7 @@ export function proxy(req: NextRequest) {
   // catálogo a Supabase, este bloque DEBE migrar a la vez que la página de
   // producto — si la página usa títulos de Supabase y esto sigue leyendo el
   // mock, un cambio de título produce un BUCLE de redirects (el middleware
-  // redirige al slug viejo y la página al nuevo). Ver
-  // docs/deuda-catalogo-estatico.md para la lista completa de afectados.
+  // redirige al slug viejo y la página al nuevo).
   const productMatch = pathname.match(/^\/shop\/product\/(\d+)(?:\/.*)?$/);
   if (productMatch) {
     const product = newArrivalsData.find((p) => p.id === Number(productMatch[1]));
