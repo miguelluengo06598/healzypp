@@ -1,6 +1,7 @@
-# HealzypBrand
+# BrandTrustSection
 
-Bloque de marca de la home (imagen + claims de la marca).
+Bloque de marca de la home (imagen + claims de la marca). El nombre mostrado
+viene de `SITE_NAME` (`@/lib/site`), no está hardcodeado.
 
 ## Props
 
@@ -13,6 +14,6 @@ Solo `next/image` y fuente `integralCF` de `@/styles/fonts`. Imágenes en `/publ
 ## Uso
 
 ```tsx
-import HealzypBrand from "@/sections/HealzypBrand";
-<HealzypBrand />
+import BrandTrustSection from "@/sections/BrandTrustSection";
+<BrandTrustSection />
 ```
