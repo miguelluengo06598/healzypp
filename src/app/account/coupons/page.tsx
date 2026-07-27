@@ -1,8 +1,9 @@
 import { Metadata } from "next";
 import { Ticket } from "lucide-react";
+import { SITE_NAME } from "@/lib/site";
 
 export const metadata: Metadata = {
-  title: "Mis cupones | HEALZYP",
+  title: `Mis cupones | ${SITE_NAME}`,
 };
 
 export default function CouponsPage() {

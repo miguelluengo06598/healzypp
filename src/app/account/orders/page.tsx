@@ -3,9 +3,10 @@ import { ShoppingBag, AlertCircle } from "lucide-react";
 import { getOrdersByUser } from "@/lib/db/user-orders";
 import OrderTimeline from "@/sections/OrderTimeline";
 import type { OrderStatusEnum } from "@/types/database.types";
+import { SITE_NAME } from "@/lib/site";
 
 export const metadata: Metadata = {
-  title: "Mis pedidos | HEALZYP",
+  title: `Mis pedidos | ${SITE_NAME}`,
 };
 
 export const dynamic = "force-dynamic";

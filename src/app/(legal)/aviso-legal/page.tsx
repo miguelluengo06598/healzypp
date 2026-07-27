@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import LegalPage from "@/components/legal/LegalPage";
+import { SITE_NAME, SITE_URL } from "@/lib/site";
 
 export const metadata: Metadata = {
-  title: "Aviso Legal | HEALZYP",
+  title: `Aviso Legal | ${SITE_NAME}`,
   description:
-    "Información legal sobre el titular del sitio web HEALZYP, conforme a la Ley 34/2002 de Servicios de la Sociedad de la Información (LSSI-CE).",
+    `Información legal sobre el titular del sitio web ${SITE_NAME}, conforme a la Ley 34/2002 de Servicios de la Sociedad de la Información (LSSI-CE).`,
 };
 
 export default function AvisoLegalPage() {
@@ -56,7 +57,7 @@ export default function AvisoLegalPage() {
           content: (
             <p>
               El presente aviso legal regula el acceso y uso del sitio web
-              accesible en el dominio <strong>healzyp.com</strong> (en adelante,
+              accesible en el dominio <strong>{SITE_URL.replace(/^https?:\/\//, "")}</strong> (en adelante,
               «el Sitio»). El acceso al Sitio implica la aceptación plena y sin
               reservas de las condiciones aquí expuestas. El titular se reserva
               el derecho a modificar estas condiciones en cualquier momento;

@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import LegalPage from "@/components/legal/LegalPage";
+import { SITE_NAME } from "@/lib/site";
 
 export const metadata: Metadata = {
-  title: "Política de Privacidad | HEALZYP",
+  title: `Política de Privacidad | ${SITE_NAME}`,
   description:
     "Información sobre el tratamiento de tus datos personales conforme al RGPD y la LOPDGDD.",
 };

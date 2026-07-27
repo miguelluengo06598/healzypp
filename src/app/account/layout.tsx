@@ -9,9 +9,10 @@ import {
   Ticket,
   UserCircle,
 } from "lucide-react";
+import { SITE_NAME } from "@/lib/site";
 
 export const metadata: Metadata = {
-  title: "Mi cuenta | HEALZYP",
+  title: `Mi cuenta | ${SITE_NAME}`,
 };
 
 const navItems = [
