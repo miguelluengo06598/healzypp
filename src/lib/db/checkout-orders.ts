@@ -6,7 +6,9 @@ import { eurosToCents, centsToEuros } from "@/lib/money"
 import type { ShippingAddress, ShippingMethod } from "@/hooks/useCheckout"
 
 export interface CheckoutOrderItem {
-  productId: number | null
+  /** Identificador real del producto (src/data/catalog.ts) — el webhook lo
+   *  usa para decrementar product_stock. */
+  productSlug: string | null
   productTitle: string
   quantity: number
   unitPriceEur: number
@@ -117,8 +119,11 @@ export async function createCheckoutOrder(
   // 4. Insert order items
   const itemRows = input.items.map((item) => ({
     order_id:        orderId,
-    product_id:      item.productId,
-    variant_id:      null as number | null,
+    // product_id (UUID) ya no se rellena — el catálogo vive en código, no
+    // en la tabla products. product_slug es lo que usa el webhook.
+    product_id:      null as string | null,
+    product_slug:    item.productSlug,
+    variant_id:      null as string | null,
     nombre_producto: item.productTitle,
     imagen_producto: null as string | null,
     cantidad:        item.quantity,

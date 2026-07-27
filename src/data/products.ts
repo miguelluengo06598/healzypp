@@ -1,20 +1,30 @@
 import type { Product } from "@/types/product.types";
+import { CATALOG } from "@/data/catalog";
 
-// TODO: reemplaza srcUrl y gallery con las imágenes reales del producto.
-// NOTE: El precio aquí refleja el precio de entrada del pack de 1 bote.
-// TODO: conectar con la tabla `products` de Supabase para carga dinámica de precios.
-//       No se hace ahora porque requeriría una query async que podría romper el flujo
-//       del carrito (Redux) si el esquema de Supabase cambia.
+// ─────────────────────────────────────────────────────────────────────────────
+// Adaptador de forma — SIN datos propios. Todo viene de src/data/catalog.ts,
+// la única fuente de verdad de nombre/precio/imágenes. NO edites precios ni
+// nombres aquí: no tendría efecto en lo que se cobra, y quedaría desincroni-
+// zado con lo que muestra el resto de la tienda. Edita src/data/catalog.ts.
+//
+// `price`/`stock`(cosmético)/`location`/`colors`/`discount` son adornos de UI
+// sin relación con el precio real cobrado (ese vive en catalog.ts como
+// `bundles[].precio` y se verifica server-side en los dos endpoints de
+// create-payment-intent) — se mantienen aquí tal cual estaban.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const catalogProduct = CATALOG[0];
+
 const gominolasProduct: Product = {
-  id: 1,
-  title: "Gominolas de vinagre de manzana",
-  srcUrl: "/images/FL1.png",
-  gallery: ["/images/FL1.png", "/images/FL2.png", "/images/FL3.png","/images/FL4.png"],
-  // Precio real del pack de 1 bote (sin descuento artificial)
-  price: 29,
+  id: catalogProduct.id,
+  title: catalogProduct.nombre,
+  srcUrl: catalogProduct.imagenes[0],
+  gallery: catalogProduct.imagenes,
+  // Precio de entrada (pack más barato) — solo para mostrar "desde X€".
+  price: catalogProduct.bundles[0].precio,
   discount: { amount: 0, percentage: 20 },
   // Sin rating/reviewsCount: los antiguos 4.8/128 eran placeholders inventados.
-  // Poblar solo cuando existan reseñas reales (ver docs/fake-social-proof.md).
+  // Poblar solo cuando existan reseñas reales.
   stock: 3,
   location: "Popular en Madrid",
   badge: "sale",
@@ -22,7 +32,7 @@ const gominolasProduct: Product = {
     { name: "Natural", code: "bg-[#E8DCC4]" },
     { name: "Verde", code: "bg-[#487D26]" },
   ],
-  sizes: ["1 Bote", "2 Botes", "3 Botes"],
+  sizes: catalogProduct.bundles.map((b) => b.nombre),
 };
 
 export const newArrivalsData: Product[] = [gominolasProduct];

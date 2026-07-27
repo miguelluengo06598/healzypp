@@ -9,17 +9,21 @@ const BodySchema = z.object({
   subtotalEur: z.number().min(0),
 })
 
-// Coupon row type — table needs to exist in Supabase
+// Coupon row type — columnas reales de la tabla coupons (database/SETUP-COMPLETO.sql),
+// en español. La versión anterior de este archivo usaba nombres en inglés
+// (code/active/type "fixed"/"percentage"/expires_at/max_uses/...) que nunca
+// existieron en la tabla real — la consulta fallaba siempre y el cupón se
+// rechazaba en silencio ("Cupón no válido" para cualquier código).
 interface CouponRow {
-  id: number
-  code: string
-  type: "fixed" | "percentage"
-  value: number
-  max_uses: number | null
-  current_uses: number
-  expires_at: string | null
-  active: boolean
-  minimum_order_eur: number | null
+  id: string
+  codigo: string
+  tipo: "porcentaje" | "fijo" | "envio_gratis"
+  valor: number
+  usos_totales: number | null
+  usos_actuales: number
+  fecha_fin: string | null
+  activo: boolean
+  minimo_pedido: number | null
 }
 
 export async function POST(req: NextRequest) {
@@ -79,8 +83,8 @@ export async function POST(req: NextRequest) {
   const { data, error } = await (db as any)
     .from("coupons")
     .select("*")
-    .eq("code", code)
-    .eq("active", true)
+    .eq("codigo", code)
+    .eq("activo", true)
     .maybeSingle()
 
   if (error) {
@@ -96,37 +100,43 @@ export async function POST(req: NextRequest) {
   const coupon = data as CouponRow
 
   // Check expiry
-  if (coupon.expires_at && new Date(coupon.expires_at) < new Date()) {
+  if (coupon.fecha_fin && new Date(coupon.fecha_fin) < new Date()) {
     return NextResponse.json({ error: "Este cupón ha caducado." }, { status: 400 })
   }
 
   // Check max uses
-  if (coupon.max_uses !== null && coupon.current_uses >= coupon.max_uses) {
+  if (coupon.usos_totales !== null && coupon.usos_actuales >= coupon.usos_totales) {
     return NextResponse.json({ error: "Este cupón ya no tiene usos disponibles." }, { status: 400 })
   }
 
   // Check minimum order
-  if (coupon.minimum_order_eur !== null && subtotalEur < coupon.minimum_order_eur) {
+  if (coupon.minimo_pedido && subtotalEur < coupon.minimo_pedido) {
     return NextResponse.json(
-      { error: `Este cupón requiere un pedido mínimo de ${coupon.minimum_order_eur.toFixed(2).replace(".", ",")}€.` },
+      { error: `Este cupón requiere un pedido mínimo de ${coupon.minimo_pedido.toFixed(2).replace(".", ",")}€.` },
       { status: 400 }
     )
   }
 
   // Calculate discount
   let discountEur = 0
-  if (coupon.type === "fixed") {
-    discountEur = Math.min(coupon.value, subtotalEur)
-  } else {
-    discountEur = Math.round((subtotalEur * coupon.value) / 100 * 100) / 100
+  if (coupon.tipo === "fijo") {
+    discountEur = Math.min(coupon.valor, subtotalEur)
+  } else if (coupon.tipo === "porcentaje") {
+    discountEur = Math.round((subtotalEur * coupon.valor) / 100 * 100) / 100
   }
+  // 'envio_gratis' no descuenta el subtotal — afecta al coste de envío, que
+  // hoy solo se calcula por importe mínimo (FREE_SHIPPING_THRESHOLD_EUR en
+  // create-payment-intent/route.ts). Integrar envio_gratis con ese cálculo
+  // es una mejora aparte, fuera del alcance de este fix de columnas.
 
   return NextResponse.json({
     valid: true,
     couponId: coupon.id,
-    type: coupon.type,
-    percentageOff: coupon.type === "percentage" ? coupon.value : undefined,
+    type: coupon.tipo,
+    percentageOff: coupon.tipo === "porcentaje" ? coupon.valor : undefined,
     discountEur,
-    message: `Cupón aplicado: -${discountEur.toFixed(2).replace(".", ",")}€`,
+    message: coupon.tipo === "envio_gratis"
+      ? "Cupón aplicado: envío gratis"
+      : `Cupón aplicado: -${discountEur.toFixed(2).replace(".", ",")}€`,
   })
 }

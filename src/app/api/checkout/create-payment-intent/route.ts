@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import Stripe from "stripe"
 import { z } from "zod"
-import { BUNDLES } from "@/lib/bundles"
+import { findBundleByNameAcrossCatalog } from "@/data/catalog"
 import { SHIPPING_OPTIONS, FREE_SHIPPING_THRESHOLD_EUR } from "@/lib/shipping"
 import { createCheckoutOrder, attachPaymentIntent } from "@/lib/db/checkout-orders"
 import { paymentIntentRatelimit, getClientIp } from "@/lib/rate-limit"
@@ -49,15 +49,15 @@ const BodySchema = z.object({
 })
 
 /**
- * Server-verified price para un item del carrito, contra los datos reales de
- * Supabase (bundles/products) — nunca contra el catálogo mock ni un precio
- * enviado por el cliente.
+ * Precio verificado de un item del carrito — 100% desde el catálogo en
+ * código (src/data/catalog.ts), la ÚNICA fuente de precio (mostrar Y
+ * cobrar). El único dato que sigue en Supabase es el STOCK real
+ * (product_stock, por slug), porque es estado mutable, no contenido.
  *
- * La tienda solo vende un producto real en 3 tamaños de bundle. El `id` del
- * item del carrito viene del catálogo mock (legacy, sin correspondencia con
- * el UUID real de Supabase), así que el único dato fiable para identificar
- * QUÉ se está comprando es el nombre del bundle en `attributes[0]` (p.ej.
- * "2 Botes"), que se traduce a `cantidad` en la tabla `bundles` real.
+ * El único dato fiable del item del carrito para identificar QUÉ se está
+ * comprando es el nombre del bundle en `attributes[0]` (p.ej. "2 Botes"),
+ * que se busca en TODO el catálogo (no un producto fijo) vía
+ * findBundleByNameAcrossCatalog.
  */
 async function getVerifiedItemPrice(
   db: ReturnType<typeof createServiceClient>,
@@ -67,48 +67,33 @@ async function getVerifiedItemPrice(
   unitPriceEur: number
   discountEur: number
   title: string
-  productId: string
+  productSlug: string
   unidadesStock: number
   stockDisponible: number
 } | null> {
   const bundleName = attributes[0]
-  const mockBundle = BUNDLES.find((b) => b.name === bundleName)
-  if (!mockBundle) return null
+  const resolved = findBundleByNameAcrossCatalog(bundleName)
+  if (!resolved) return null
+  const { product, bundle } = resolved
 
-  const { data: bundleRow, error: bundleError } = await db
-    .from("bundles")
-    .select("id, product_id, cantidad, precio, activo")
-    .eq("cantidad", mockBundle.id)
-    .eq("activo", true)
+  const { data: stockRow, error: stockError } = await db
+    .from("product_stock")
+    .select("stock")
+    .eq("product_slug", product.slug)
     .maybeSingle()
 
-  if (bundleError) {
-    console.error("[checkout/create-payment-intent] error consultando bundle:", bundleError.message)
+  if (stockError) {
+    console.error("[checkout/create-payment-intent] error consultando stock:", stockError.message)
     return null
   }
-  if (!bundleRow) return null
 
-  const { data: productRow, error: productError } = await db
-    .from("products")
-    .select("id, nombre, precio, activo, stock")
-    .eq("id", bundleRow.product_id)
-    .eq("activo", true)
-    .maybeSingle()
-
-  if (productError) {
-    console.error("[checkout/create-payment-intent] error consultando producto:", productError.message)
-    return null
-  }
-  if (!productRow) return null
-
-  const unitPriceEur = Number(bundleRow.precio)
   return {
-    unitPriceEur,
+    unitPriceEur: bundle.precio,
     discountEur: 0,
-    title: `${productRow.nombre} — ${mockBundle.name}`,
-    productId: productRow.id,
-    unidadesStock: bundleRow.cantidad * quantity,
-    stockDisponible: productRow.stock,
+    title: `${product.nombre} — ${bundle.nombre}`,
+    productSlug: product.slug,
+    unidadesStock: bundle.cantidad * quantity,
+    stockDisponible: stockRow?.stock ?? 0,
   }
 }
 
@@ -159,7 +144,7 @@ export async function POST(req: NextRequest) {
   }
 
   const verifiedItems: Array<{
-    productId: number
+    productSlug: string
     productTitle: string
     quantity: number
     unitPriceEur: number
@@ -171,7 +156,7 @@ export async function POST(req: NextRequest) {
   // arrastra error binario; el amount de Stripe debe ser un entero limpio.
   let subtotalCents = 0
 
-  // Stock necesario acumulado por producto real (UUID de Supabase), para
+  // Stock necesario acumulado por producto real (slug de catalog.ts), para
   // soportar varias líneas del carrito que apunten al mismo producto con
   // distintos tamaños de bundle.
   const stockNeededByProduct = new Map<string, number>()
@@ -186,7 +171,7 @@ export async function POST(req: NextRequest) {
       )
     }
     verifiedItems.push({
-      productId: item.id,
+      productSlug: verified.productSlug,
       productTitle: verified.title,
       quantity: item.quantity,
       unitPriceEur: verified.unitPriceEur,
@@ -196,15 +181,15 @@ export async function POST(req: NextRequest) {
     subtotalCents += eurosToCents(verified.unitPriceEur) * item.quantity
 
     stockNeededByProduct.set(
-      verified.productId,
-      (stockNeededByProduct.get(verified.productId) ?? 0) + verified.unidadesStock
+      verified.productSlug,
+      (stockNeededByProduct.get(verified.productSlug) ?? 0) + verified.unidadesStock
     )
-    stockAvailableByProduct.set(verified.productId, verified.stockDisponible)
+    stockAvailableByProduct.set(verified.productSlug, verified.stockDisponible)
   }
 
   // ── Comprobación de stock (sin bloqueo) antes de crear pedido/PaymentIntent ──
-  for (const [productId, needed] of stockNeededByProduct) {
-    const available = stockAvailableByProduct.get(productId) ?? 0
+  for (const [productSlug, needed] of stockNeededByProduct) {
+    const available = stockAvailableByProduct.get(productSlug) ?? 0
     if (available < needed) {
       return NextResponse.json(
         { error: "No hay stock suficiente para completar este pedido." },
@@ -225,24 +210,32 @@ export async function POST(req: NextRequest) {
   if (couponCode) {
     try {
       const db = createServiceClient()
+      // Columnas reales de coupons (español) — ver misma corrección en
+      // validate-coupon/route.ts. Antes usaba nombres en inglés que nunca
+      // existieron en la tabla real; la consulta fallaba siempre y el
+      // descuento del cupón se quedaba silenciosamente en 0.
       const { data: couponData } = await (db as any)
         .from('coupons')
         .select('*')
-        .eq('code', couponCode.toUpperCase())
-        .eq('active', true)
+        .eq('codigo', couponCode.toUpperCase())
+        .eq('activo', true)
         .maybeSingle()
 
       if (couponData) {
-        const isExpired = couponData.expires_at && new Date(couponData.expires_at) < new Date()
-        const isMaxed = couponData.max_uses !== null && couponData.current_uses >= couponData.max_uses
+        const isExpired = couponData.fecha_fin && new Date(couponData.fecha_fin) < new Date()
+        const isMaxed = couponData.usos_totales !== null && couponData.usos_actuales >= couponData.usos_totales
         const meetsMin =
-          couponData.minimum_order_eur === null ||
-          subtotalCents >= eurosToCents(couponData.minimum_order_eur)
+          !couponData.minimo_pedido ||
+          subtotalCents >= eurosToCents(couponData.minimo_pedido)
 
         if (!isExpired && !isMaxed && meetsMin) {
-          safeCouponDiscountCents = couponData.type === 'fixed'
-            ? Math.min(eurosToCents(couponData.value), subtotalCents)
-            : Math.round(subtotalCents * couponData.value / 100)
+          if (couponData.tipo === 'fijo') {
+            safeCouponDiscountCents = Math.min(eurosToCents(couponData.valor), subtotalCents)
+          } else if (couponData.tipo === 'porcentaje') {
+            safeCouponDiscountCents = Math.round(subtotalCents * couponData.valor / 100)
+          }
+          // 'envio_gratis' no descuenta subtotalCents aquí — ver nota en
+          // validate-coupon/route.ts.
         }
       }
     } catch (err) {

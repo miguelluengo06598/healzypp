@@ -81,25 +81,29 @@ export async function POST(req: NextRequest) {
         }
 
         // ── Decremento atómico de stock — solo aquí, tras confirmarse el pago ──
+        // Agrupa por product_slug (src/data/catalog.ts), no por product_id:
+        // desde la unificación del catálogo, product_id ya no se rellena
+        // (la tabla products está dormante) — product_slug es el
+        // identificador real que decrement_product_stock() espera.
         if (order?.order_items?.length) {
           const stockByProduct = new Map<string, number>();
           for (const item of order.order_items) {
-            if (!item.product_id || !item.unidades_stock) continue;
+            if (!item.product_slug || !item.unidades_stock) continue;
             stockByProduct.set(
-              item.product_id,
-              (stockByProduct.get(item.product_id) ?? 0) + item.unidades_stock
+              item.product_slug,
+              (stockByProduct.get(item.product_slug) ?? 0) + item.unidades_stock
             );
           }
-          for (const [productId, qty] of stockByProduct) {
-            const decremented = await decrementProductStock(productId, qty);
+          for (const [productSlug, qty] of stockByProduct) {
+            const decremented = await decrementProductStock(productSlug, qty);
             if (!decremented) {
               console.error(
-                `[stripe-webhook] Stock insuficiente al decrementar producto ${productId} (qty=${qty}) para el pedido ${order.numero_pedido} — venta ya cobrada, requiere revisión manual.`
+                `[stripe-webhook] Stock insuficiente al decrementar producto ${productSlug} (qty=${qty}) para el pedido ${order.numero_pedido} — venta ya cobrada, requiere revisión manual.`
               );
               sendPushover({
                 title: "⚠️ Posible sobreventa de stock",
                 message:
-                  `Pedido #${order.numero_pedido} ya cobrado, pero el stock del producto ${productId} ` +
+                  `Pedido #${order.numero_pedido} ya cobrado, pero el stock del producto ${productSlug} ` +
                   `no alcanzaba para descontar ${qty} unidades. Revisar inventario manualmente.`,
                 priority: 1,
                 sound: "falling",
