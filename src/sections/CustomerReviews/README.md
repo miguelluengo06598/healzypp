@@ -2,7 +2,7 @@
 
 Sección honesta de reseñas de la ficha de producto: no muestra reseñas
 inventadas ni ratings placeholder — sustituyó al antiguo sistema de
-`DUMMY_REVIEWS` fabricadas (ver docs/fake-social-proof.md).
+`DUMMY_REVIEWS` fabricadas.
 
 ## Props
 

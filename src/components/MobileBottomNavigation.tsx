@@ -33,7 +33,7 @@ type NavItem = {
 // "Favoritos" (icon: Heart) se quitó de aquí: apuntaba a /#favoritos, un
 // ancla que no existe en ningún sitio — no hay página de wishlist en la app,
 // solo el toggle de favorito por producto. Reintroducir cuando exista esa
-// página (ver docs/deuda-drawer-sticky-cart-muerto.md).
+// página.
 const NAV_ITEMS: NavItem[] = [
   { label: "Inicio", icon: Home, href: "/" },
   { label: "Buscar", icon: Search, href: "/shop" },
