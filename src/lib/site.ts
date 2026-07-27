@@ -1,15 +1,23 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// Identidad del sitio y URLs canónicas — compartido entre sitemap, robots,
-// generateMetadata y los componentes que enlazan a páginas de producto.
+// Identidad de marca de la tienda — ÚNICA fuente de verdad. Todo el código
+// (metadata, navbar, footer, notificaciones, páginas legales, Meta Pixel...)
+// importa estas constantes en vez de hardcodear el nombre/dominio/email —
+// así un comprador de la plantilla personaliza su marca completa cambiando
+// solo variables de entorno, sin tocar ningún archivo de código.
 // Sin "use client"/"use server" para que sea importable desde ambos contextos.
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const SITE_NAME = "HEALZYP";
+/** Nombre de la tienda, mostrado en navbar/footer/metadata/notificaciones. */
+export const SITE_NAME = process.env.NEXT_PUBLIC_SITE_NAME ?? "HEALZYP";
 
 /** Dominio canónico de producción; sobreescribible por entorno (previews). */
 export const SITE_URL = (
   process.env.NEXT_PUBLIC_SITE_URL ?? "https://healzyp.com"
 ).replace(/\/+$/, "");
+
+/** Email de contacto público (footer, confirmación de pedido, Meta Pixel). */
+export const CONTACT_EMAIL =
+  process.env.NEXT_PUBLIC_CONTACT_EMAIL ?? "hola@healzyp.com";
 
 /**
  * Slug SEO-safe: minúsculas, sin acentos/tildes (NFD + strip de diacríticos),
