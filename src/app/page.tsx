@@ -2,7 +2,7 @@ import ProductListSec from "@/sections/ProductListSec";
 import ProductCard from "@/components/common/ProductCard";
 import Brands from "@/sections/Brands";
 import Hero from "@/sections/Hero";
-import HealzypBrand from "@/sections/HealzypBrand";
+import BrandTrustSection from "@/sections/BrandTrustSection";
 import { newArrivalsData, topSellingData } from "@/data/products";
 
 export default function Home() {
@@ -29,7 +29,7 @@ export default function Home() {
           />
         </div>
         <div className="mb-[50px] sm:mb-20">
-          <HealzypBrand />
+          <BrandTrustSection />
         </div>
       </main>
     </>

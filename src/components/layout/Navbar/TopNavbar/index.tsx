@@ -11,6 +11,7 @@ import { MenuItem } from "./MenuItem";
 import ResTopNavbar from "./ResTopNavbar";
 import CartBtn from "./CartBtn";
 import UserMenu from "@/components/navbar/UserMenu";
+import { SITE_NAME } from "@/lib/site";
 
 const data: NavMenu = [
   {
@@ -59,7 +60,7 @@ const TopNavbar = () => {
               "text-2xl lg:text-[32px] mb-2",
             ])}
           >
-            HEALZYP
+            {SITE_NAME}
           </Link>
         </div>
 

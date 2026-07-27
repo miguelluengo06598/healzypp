@@ -18,6 +18,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import { SITE_NAME } from "@/lib/site";
 
 const ResTopNavbar = ({ data }: { data: NavMenu }) => {
   return (
@@ -36,7 +37,7 @@ const ResTopNavbar = ({ data }: { data: NavMenu }) => {
           <SheetTitle asChild>
             <SheetClose asChild>
               <Link href="/" className={cn([integralCF.className, "text-2xl"])}>
-                HEALZYP
+                {SITE_NAME}
               </Link>
             </SheetClose>
           </SheetTitle>

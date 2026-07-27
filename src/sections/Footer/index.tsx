@@ -8,6 +8,7 @@ import LinksSection from "./LinksSection";
 import Image from "next/image";
 import NewsLetterSection from "./NewsLetterSection";
 import LayoutSpacing from "./LayoutSpacing";
+import { SITE_NAME } from "@/lib/site";
 
 const socialsData: (SocialNetworks & { name: string })[] = [
   {
@@ -78,7 +79,7 @@ const Footer = () => {
                   "text-[28px] lg:text-[32px] mb-6",
                 ])}
               >
-                HEALZYP
+                {SITE_NAME}
               </h1>
               <p className="text-black/60 text-sm mb-9">
                 Tenemos productos que se adaptan a tu estilo de vida saludable
