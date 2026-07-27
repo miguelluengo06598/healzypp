@@ -9,6 +9,7 @@
 import { useCallback } from 'react'
 import { useCookieConsent } from '@/hooks/useCookieConsent'
 import { generateEventId, getPurchaseEventId } from '@/lib/meta/pixel'
+import { SITE_NAME } from '@/lib/site'
 
 interface ProductData {
   id: number
@@ -177,7 +178,7 @@ export function useMetaPixel() {
       if (fbq) {
         fbq('track', 'Purchase', {
           content_ids:  order.items.map((i) => String(i.id)),
-          content_name: 'Compra HEALZYP',
+          content_name: `Compra ${SITE_NAME}`,
           content_type: 'product',
           value:        order.value,
           currency:     order.currency,

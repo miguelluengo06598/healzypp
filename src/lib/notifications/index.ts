@@ -8,6 +8,8 @@
 // PII en texto plano (nombre, teléfono, dirección). paymentIntentId no es PII
 // — es la clave de búsqueda real hoy en el dashboard de Stripe, a falta de
 // panel admin propio en la app al que enlazar.
+import { SITE_NAME } from '@/lib/site'
+
 export interface OrderNotificationData {
   orderNumber: string
   totalEuros: number
@@ -24,8 +26,8 @@ export async function sendOrderNotification(data: OrderNotificationData): Promis
   }
 
   const title = data.status === 'failed'
-    ? '❌ Pago fallido HEALZYP'
-    : '🛒 Nuevo pedido HEALZYP'
+    ? `❌ Pago fallido ${SITE_NAME}`
+    : `🛒 Nuevo pedido ${SITE_NAME}`
 
   const tags = data.status === 'failed' ? 'warning,money_with_wings' : 'shopping,moneybag'
   const priority = 'high'
