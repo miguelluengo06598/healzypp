@@ -27,7 +27,7 @@ export async function getCurrentUserId(): Promise<string | null> {
   }
 }
 
-// Mismo criterio que is_admin() en supabase/schema.sql: role='admin' en
+// Mismo criterio que is_admin() en database/SETUP-COMPLETO.sql: role='admin' en
 // app_metadata (solo se puede fijar server-side, a diferencia de user_metadata
 // que el propio usuario puede editar — no sirve para autorización).
 export async function isCurrentUserAdmin(): Promise<boolean> {

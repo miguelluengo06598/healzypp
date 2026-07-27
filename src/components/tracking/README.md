@@ -4,7 +4,9 @@
 
 ### 1. Aplicar schema SQL
 
-Ejecuta `database/tracking-schema.sql` en el SQL Editor de Supabase.
+Ejecuta `database/SETUP-COMPLETO.sql` en el SQL Editor de Supabase (crea
+las tablas de tracking junto con el resto del esquema — ver
+`GUIA-INSTALACION.md` para el proceso completo paso a paso).
 
 ### 2. Añadir TrackingProvider al layout
 

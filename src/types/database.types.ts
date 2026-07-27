@@ -1,6 +1,6 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // Tipos TypeScript para la base de datos Supabase
-// Actualizado manualmente para coincidir con supabase/schema.sql
+// Actualizado manualmente para coincidir con database/SETUP-COMPLETO.sql
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type PaymentMethod = 'CARD'

@@ -339,7 +339,7 @@ export async function getOrderByStripePaymentIntentId(
 // decrementProductStock
 // Decremento atómico — llamar SOLO desde el webhook de Stripe al confirmar
 // el pago (payment_intent.succeeded), nunca al crear el PaymentIntent.
-// Usa la función Postgres decrement_product_stock (ver supabase/schema.sql),
+// Usa la función Postgres decrement_product_stock (ver database/SETUP-COMPLETO.sql),
 // que hace UPDATE ... WHERE stock >= qty de forma atómica contra race conditions.
 // ─────────────────────────────────────────────────────────────────────────────
 

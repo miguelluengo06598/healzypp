@@ -3,7 +3,7 @@
 //
 // A diferencia de src/lib/db/orders.ts (service client, bypassa RLS), aquí se
 // usa el cliente anon con la sesión del usuario: la política RLS
-// orders_select_own (auth.uid() = user_id, ver supabase/schema.sql) hace el
+// orders_select_own (auth.uid() = user_id, ver database/SETUP-COMPLETO.sql) hace el
 // scoping EN la base de datos. Sin userId como parámetro a propósito — así no
 // existe la clase de bug IDOR que se eliminó con getOrderByNumber (Fase 5).
 //
