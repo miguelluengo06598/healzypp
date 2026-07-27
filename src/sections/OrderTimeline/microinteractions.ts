@@ -1,6 +1,6 @@
 /**
  * ═════════════════════════════════════════════════════════════════════════════
- *  MICROINTERACTIONS — Librería centralizada de animaciones HEALZYP
+ *  MICROINTERACTIONS — Librería centralizada de animaciones de la tienda
  * ═════════════════════════════════════════════════════════════════════════════
  *
  *  Reutiliza y mejora las animaciones dispersas por el proyecto.
