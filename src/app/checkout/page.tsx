@@ -13,6 +13,7 @@ import { integralCF } from "@/styles/fonts"
 import { cn } from "@/lib/utils"
 import { FaLock } from "react-icons/fa"
 import { useCheckout } from "@/hooks/useCheckout"
+import { SITE_NAME } from "@/lib/site"
 
 import ContactSection from "@/components/checkout/ContactSection"
 import ShippingAddressSection from "@/components/checkout/ShippingAddressSection"
@@ -158,7 +159,7 @@ export default function CheckoutPage() {
           </Link>
           <Link href="/">
             <span className={cn(integralCF.className, "text-xl md:text-2xl font-bold")}>
-              HEALZYP
+              {SITE_NAME}
             </span>
           </Link>
           <p className="hidden sm:flex items-center gap-1.5 text-xs text-black/40">

@@ -6,6 +6,7 @@ import Image from "next/image";
 import { supabase } from "@/lib/supabase";
 import { useAuthModal } from "@/components/auth/AuthModalContext";
 import { clearSessionCookie } from "@/lib/auth-cookie";
+import { SITE_NAME } from "@/lib/site";
 import {
   Drawer,
   DrawerContent,
@@ -267,7 +268,7 @@ export default function UserMenu() {
               </DrawerClose>
               <DrawerTitle className="sr-only">Menú de cuenta</DrawerTitle>
               <DrawerDescription className="sr-only">
-                Opciones de tu cuenta de HEALZYP
+                {`Opciones de tu cuenta de ${SITE_NAME}`}
               </DrawerDescription>
             </DrawerHeader>
             {menuContent}

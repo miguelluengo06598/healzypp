@@ -13,6 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { setSessionCookie, clearSessionCookie } from "@/lib/auth-cookie";
 import { Mail, Lock, User, Eye, EyeOff, Loader2 } from "lucide-react";
+import { SITE_NAME } from "@/lib/site";
 
 function getErrorMessage(error: any): string {
   const msg = error?.message?.toLowerCase() || "";
@@ -196,8 +197,8 @@ export default function AuthModal() {
               {isForgot
                 ? "Introduce tu email y te enviaremos un enlace."
                 : mode === "login"
-                ? "Accede a tu cuenta de HEALZYP"
-                : "Únete a HEALZYP hoy"}
+                ? `Accede a tu cuenta de ${SITE_NAME}`
+                : `Únete a ${SITE_NAME} hoy`}
             </DialogDescription>
           </DialogHeader>
 
