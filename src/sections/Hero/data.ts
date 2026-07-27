@@ -1,7 +1,8 @@
-// Contenido HEALZYP por defecto para la sección Hero.
+// Contenido por defecto de la sección Hero (personalizable por tienda).
 // Este archivo ES el punto de adaptación: al copiar la sección a otro
 // proyecto, se reescribe data.ts (o se pasan props) sin tocar index.tsx.
 import { newArrivalsData } from "@/data/products";
+import { SITE_NAME } from "@/lib/site";
 import type { HeroProps } from "./types";
 
 export const heroDefaults: Required<HeroProps> = {
@@ -19,7 +20,7 @@ export const heroDefaults: Required<HeroProps> = {
   ],
   heroImage: {
     src: "/images/FOTOVINDEMANPORT.png",
-    alt: "Gominolas de vinagre de manzana HEALZYP",
+    alt: `Gominolas de vinagre de manzana ${SITE_NAME}`,
   },
   miniCard: {
     imageSrc: newArrivalsData[0]?.srcUrl ?? "/images/FL1.png",

@@ -2,7 +2,7 @@
 
 Secciones de marketing de la ficha de producto: beneficios (3 tarjetas), pasos
 de uso (3 columnas), bloques imagen/texto alternados y reseñas. Sección pura:
-el contenido vive en `./data.ts` (defaults HEALZYP) o llega por props, y el
+el contenido vive en `./data.ts` (defaults de la tienda) o llega por props, y el
 envoltorio de tracking se inyecta vía `SectionWrapper` (por defecto ninguno).
 
 ## Props

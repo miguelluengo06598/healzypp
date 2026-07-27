@@ -8,7 +8,7 @@ animados, imagen de producto con badges flotantes de cristal y mini-card
 
 - `index.tsx` — el componente (client, framer-motion)
 - `types.ts` — `HeroProps` (todas las props opcionales)
-- `data.ts` — **el punto de adaptación**: contenido HEALZYP por defecto.
+- `data.ts` — **el punto de adaptación**: contenido por defecto de la tienda.
   Al copiar la sección a otro proyecto, reescribe `data.ts` (o pasa props)
   sin tocar `index.tsx`. Es el único archivo que importa datos del proyecto
   (`@/data/products` para la mini-card).

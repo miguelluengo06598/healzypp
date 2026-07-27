@@ -1,4 +1,4 @@
-// Contenido HEALZYP por defecto para BundleSelection.
+// Contenido por defecto de la tienda para BundleSelection.
 // Punto de adaptación: reescribir estos títulos (o la fuente BUNDLES en
 // @/lib/bundles) en otro proyecto, sin tocar index.tsx.
 

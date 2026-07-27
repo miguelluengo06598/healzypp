@@ -1,4 +1,4 @@
-// Contenido HEALZYP por defecto para ProductSections.
+// Contenido por defecto de la tienda para ProductSections.
 // Punto de adaptación: reescribir este archivo (o pasar props) en otro
 // proyecto, sin tocar index.tsx.
 

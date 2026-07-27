@@ -38,7 +38,7 @@ export const metadata: Metadata = {
     description: DEFAULT_DESCRIPTION,
     // 500x500 — única imagen de producto real disponible hoy; sustituir por un
     // asset dedicado 1200x630 cuando exista.
-    images: [{ url: "/images/FL1.png", width: 500, height: 500, alt: "Gominolas de vinagre de manzana HEALZYP" }],
+    images: [{ url: "/images/FL1.png", width: 500, height: 500, alt: `Gominolas de vinagre de manzana ${SITE_NAME}` }],
   },
   twitter: {
     card: "summary_large_image",
