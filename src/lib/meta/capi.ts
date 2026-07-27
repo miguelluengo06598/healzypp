@@ -3,6 +3,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { createHash } from 'crypto'
+import { SITE_URL } from '@/lib/site'
 
 const GRAPH_API_VERSION = 'v19.0'
 
@@ -142,7 +143,7 @@ export async function sendPurchaseCAPI(params: ServerPurchaseParams): Promise<vo
     event_id:         getPurchaseEventId(params.orderNumber),
     event_time:       Math.floor(Date.now() / 1000),
     action_source:    'website',
-    event_source_url: 'https://healzyp.com/order/confirmation',
+    event_source_url: `${SITE_URL}/order/confirmation`,
     user_data: {
       em:                hashForMeta(params.email),
       ph:                hashForMeta(params.phone),

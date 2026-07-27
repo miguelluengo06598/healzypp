@@ -5,6 +5,7 @@ import { createServiceClient } from "@/lib/supabase";
 import { sendOrderNotification } from "@/lib/notifications";
 import { sendPushover } from "@/lib/notifications/pushover";
 import { sendPurchaseCAPI } from "@/lib/meta/capi";
+import { SITE_URL } from "@/lib/site";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2026-04-22.dahlia",
@@ -141,7 +142,7 @@ export async function POST(req: NextRequest) {
                 `✅ Pago confirmado por Stripe`,
               priority: 1,
               sound: "cashregister",
-              url: `https://healzyp.com/admin/orders/${so.id}`,
+              url: `${SITE_URL}/admin/orders/${so.id}`,
               url_title: "Ver pedido",
             }).catch((e) => console.error("[stripe-webhook] Pushover CONFIRMED error:", e));
 

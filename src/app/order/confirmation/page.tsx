@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils"
 import { FaCheckCircle } from "react-icons/fa"
 import { useMetaPixel } from "@/hooks/useMetaPixel"
 import { getPurchaseEventId } from "@/lib/meta/pixel"
+import { CONTACT_EMAIL } from "@/lib/site"
 
 interface OrderItem {
   name: string
@@ -301,8 +302,8 @@ export default function ConfirmationPage() {
 
           <p className="text-center text-xs text-black/30 mt-2 pb-6">
             ¿Alguna pregunta? Escríbenos a{" "}
-            <a href="mailto:hola@healzyp.com" className="underline hover:text-black/60">
-              hola@healzyp.com
+            <a href={`mailto:${CONTACT_EMAIL}`} className="underline hover:text-black/60">
+              {CONTACT_EMAIL}
             </a>
           </p>
         </motion.div>
