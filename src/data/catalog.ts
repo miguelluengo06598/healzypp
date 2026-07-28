@@ -74,6 +74,27 @@ export const CATALOG: CatalogProduct[] = [
       { id: 3, cantidad: 3, nombre: "3 Botes", precio: 59.99, precioOriginal: 89.97, popular: false },
     ],
   },
+  {
+    id: 2,
+    slug: "gominolas-jengibre",
+    nombre: "Gominolas de Jengibre",
+    descripcion:
+      "Gominolas naturales elaboradas con jengibre. Favorecen la digestión, ayudan a reducir la sensación de pesadez y aportan energía a lo largo del día. 60 unidades por bote. Aptas para veganos y sin gluten.",
+    descripcionCorta: "60 gominolas de jengibre natural, digestión y energía.",
+    // PLACEHOLDER: reutiliza la imagen del producto de vinagre porque todavía
+    // no hay fotos reales de jengibre en public/images/. Sustituir en cuanto
+    // existan — hoy la ficha muestra el bote equivocado.
+    imagenes: ["/images/FL1.png"],
+    categoria: "Suplementos",
+    metaTitle: "Gominolas de Jengibre | Natural y Vegano",
+    metaDescription:
+      "Compra gominolas de jengibre natural. Favorecen la digestión y aportan energía. Envío gratis.",
+    bundles: [
+      { id: 4, cantidad: 1, nombre: "1 Bote", precio: 24.99, popular: false },
+      { id: 5, cantidad: 2, nombre: "2 Botes", precio: 44.99, precioOriginal: 49.98, popular: true },
+      { id: 6, cantidad: 3, nombre: "3 Botes", precio: 59.99, precioOriginal: 74.97, popular: false },
+    ],
+  },
 ]
 
 // ─── Helpers de búsqueda — usar estos, no recorrer CATALOG a mano ──────────
