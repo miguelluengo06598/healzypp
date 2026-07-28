@@ -29,10 +29,15 @@ const data: NavMenu = [
     children: [],
   },
   {
+    // Sustituye a "Novedades" (que solo era un ancla dentro de /shop). El
+    // seguimiento tiene que estar alcanzable desde la web: hasta ahora solo
+    // se llegaba por el enlace del email de envío, así que quien no lo
+    // hubiera recibido —o lo hubiera perdido— no tenía forma de consultar su
+    // pedido sin cuenta.
     id: 3,
     type: "MenuItem",
-    label: "Novedades",
-    url: "/shop#new-arrivals",
+    label: "Mi pedido",
+    url: "/seguimiento",
     children: [],
   },
   {
