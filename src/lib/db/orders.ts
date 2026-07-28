@@ -5,7 +5,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { createServiceClient } from '@/lib/supabase'
-import { BUNDLES } from '@/lib/bundles'
+import { findBundleByIdAcrossCatalog } from '@/data/catalog'
 import type {
   OrderRow,
   OrderItemRow,
@@ -55,80 +55,20 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
   }
 
   try {
-  // ── 1-3. Ramas independientes en paralelo ────────────────────────────────
-  // Tres ramas sin dependencias entre sí: (a) bundle → producto (el producto
-  // SÍ depende de bundle.product_id, por eso va encadenado dentro de la misma
-  // rama), (b) upsert de perfil (solo depende del input) y (c) el número de
-  // pedido (sin inputs; ya se ejecutaba incondicionalmente en la versión
-  // secuencial, así que paralelizar no cambia cuándo se consume un número).
-  // Cada rama conserva su manejo de errores: bundle/producto/perfil degradan
-  // con warn sin abortar, exactamente igual que antes.
-
-  const readBundleAndProduct = async (): Promise<{
-    bundle: {
-      id: number
-      name: string
-      price: number
-      product_id: number | null
-      cantidad: number
-    } | null
-    product: { id: number; title: string } | null
-  }> => {
-    let bundle: {
-      id: number
-      name: string
-      price: number
-      product_id: number | null
-      cantidad: number
-    } | null = null
-
-    try {
-      const { data: bundleRaw, error: bundleError } = await db
-        .from('bundles')
-        .select('id, product_id, nombre, cantidad, precio, precio_original, ahorro, porcentaje_dto, precio_por_unidad, es_popular, orden, activo')
-        .eq('id', input.bundleId)
-        .eq('activo', true)
-        .single()
-
-      if (!bundleError && bundleRaw) {
-        const raw = bundleRaw as any
-        bundle = {
-          id: raw.id,
-          name: raw.nombre ?? 'Bundle',
-          price: Number(raw.precio ?? 0),
-          product_id: raw.product_id ?? null,
-          cantidad: Number(raw.cantidad ?? input.bundleId),
-        }
-      } else if (bundleError) {
-        console.warn('[createOrder] No se pudo leer bundle:', bundleError.message)
-      }
-    } catch (err) {
-      console.warn('[createOrder] No se pudo leer bundle:', err)
-    }
-
-    // Intentar leer el producto asociado de forma aislada (la tabla puede tener columnas distintas)
-    let product: { id: number; title: string } | null = null
-    if (bundle?.product_id) {
-      try {
-        const { data: productRaw, error: productError } = await db
-          .from('products')
-          .select('id, nombre')
-          .eq('id', bundle.product_id)
-          .single()
-        if (!productError && productRaw) {
-          const raw = productRaw as any
-          product = {
-            id: raw.id,
-            title: raw.nombre ?? 'Gominolas de vinagre de manzana',
-          }
-        }
-      } catch (err) {
-        console.warn('[createOrder] No se pudo leer producto:', err)
-      }
-    }
-
-    return { bundle, product }
+  // ── 1. Resolver bundle/producto — 100% desde el catálogo en código
+  // (src/data/catalog.ts), nunca desde Supabase. A diferencia de la
+  // versión anterior (que consultaba bundles/products en Supabase y podía
+  // no encontrar la fila, de ahí el fallback a BUNDLES/precio del
+  // cliente), esta búsqueda es en memoria y no puede fallar por red — solo
+  // falla si el bundleId no existe en el catálogo, lo cual es un dato
+  // inválido real, no un problema de disponibilidad.
+  const resolved = findBundleByIdAcrossCatalog(input.bundleId)
+  if (!resolved) {
+    return { success: false, error: `El bundle solicitado (${input.bundleId}) no existe en el catálogo.` }
   }
+  const { product, bundle } = resolved
+  const unitPriceEur = bundle.precio
+  const unidadesStock = bundle.cantidad
 
   const upsertProfile = async (): Promise<string | null> => {
     // Upsert en profiles solo si el usuario está autenticado
@@ -154,32 +94,11 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
     }
   }
 
-  const [{ bundle, product }, profileId, { data: orderNumber, error: numberError }] =
+  const [profileId, { data: orderNumber, error: numberError }] =
     await Promise.all([
-      readBundleAndProduct(),
       upsertProfile(),
       db.rpc('generate_order_number'),
     ])
-
-  // Si Supabase no respondió, usar datos locales o el precio que envió el cliente
-  let unitPriceEur: number
-  let bundleName: string
-  let unidadesStock: number
-  if (bundle) {
-    unitPriceEur = bundle.price
-    bundleName = bundle.name
-    unidadesStock = bundle.cantidad
-  } else {
-    console.warn('[createOrder] Bundle no encontrado en Supabase, usando datos locales')
-    const localBundle = BUNDLES.find(b => b.id === input.bundleId)
-    const clientPriceEur =
-      typeof input.bundlePriceInCents === 'number' && input.bundlePriceInCents >= 0
-        ? input.bundlePriceInCents / 100
-        : null
-    unitPriceEur = clientPriceEur ?? (localBundle ? localBundle.priceInCents / 100 : 0)
-    bundleName = localBundle?.name ?? 'Bundle desconocido'
-    unidadesStock = localBundle?.id ?? input.bundleId
-  }
 
   if (numberError || !orderNumber) {
     console.error('[createOrder] Error en generate_order_number:', numberError)
@@ -234,9 +153,13 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
     .from('order_items')
     .insert({
       order_id:        orderId,
-      product_id:      product?.id ?? null,
+      // product_id (UUID) ya no se rellena — el catálogo vive en código,
+      // no en la tabla products. product_slug es el identificador real que
+      // usa el webhook para decrementar stock (ver product_stock).
+      product_id:      null,
+      product_slug:    product.slug,
       variant_id:      null,
-      nombre_producto: product?.title ?? 'Gominolas de vinagre de manzana',
+      nombre_producto: product.nombre,
       imagen_producto: null,
       cantidad:        1,
       precio_unitario: unitPriceEur,
@@ -273,7 +196,7 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
 }
 
 export interface OrderWithItems extends OrderRow {
-  order_items: Pick<OrderItemRow, 'id' | 'product_id' | 'nombre_producto' | 'cantidad' | 'precio_unitario' | 'precio_total' | 'unidades_stock'>[]
+  order_items: Pick<OrderItemRow, 'id' | 'product_id' | 'product_slug' | 'nombre_producto' | 'cantidad' | 'precio_unitario' | 'precio_total' | 'unidades_stock'>[]
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -320,6 +243,7 @@ export async function getOrderByStripePaymentIntentId(
       order_items (
         id,
         product_id,
+        product_slug,
         nombre_producto,
         cantidad,
         precio_unitario,
@@ -340,15 +264,17 @@ export async function getOrderByStripePaymentIntentId(
 // Decremento atómico — llamar SOLO desde el webhook de Stripe al confirmar
 // el pago (payment_intent.succeeded), nunca al crear el PaymentIntent.
 // Usa la función Postgres decrement_product_stock (ver database/SETUP-COMPLETO.sql),
-// que hace UPDATE ... WHERE stock >= qty de forma atómica contra race conditions.
+// que opera sobre product_stock por slug (no sobre products.id — esa tabla
+// está dormante desde la unificación del catálogo en código) y hace
+// UPDATE ... WHERE stock >= qty de forma atómica contra race conditions.
 // ─────────────────────────────────────────────────────────────────────────────
 
-export async function decrementProductStock(productId: string, qty: number): Promise<boolean> {
+export async function decrementProductStock(productSlug: string, qty: number): Promise<boolean> {
   if (qty <= 0) return true
 
   const db = createServiceClient()
   const { data, error } = await db.rpc('decrement_product_stock', {
-    p_product_id: productId,
+    p_product_slug: productSlug,
     p_qty: qty,
   })
 

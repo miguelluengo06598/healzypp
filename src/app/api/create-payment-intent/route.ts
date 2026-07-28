@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { z } from "zod";
-import { BUNDLES } from "@/lib/bundles";
+import { findBundleByIdAcrossCatalog } from "@/data/catalog";
 import { paymentIntentRatelimit, getClientIp } from "@/lib/rate-limit";
 import { isTrustedOrigin } from "@/lib/security/origin-check";
 import { createServiceClient } from "@/lib/supabase";
@@ -67,15 +67,21 @@ export async function POST(req: NextRequest) {
   const { bundleId } = parsed.data;
 
   try {
-    // ── Validar bundle en servidor — nunca confiar en el cliente para el importe
-    const bundle = BUNDLES.find((b) => b.id === bundleId);
-    if (!bundle) {
+    // ── Resolver bundle/producto — 100% desde el catálogo en código
+    //    (src/data/catalog.ts), la ÚNICA fuente de precio: se usa el mismo
+    //    valor para mostrar (UI) y para cobrar (aquí). Nunca hay dos precios
+    //    que puedan divergir, a diferencia del diseño anterior (mock +
+    //    verificación en Supabase con comprobación de igualdad).
+    const resolved = findBundleByIdAcrossCatalog(bundleId);
+    if (!resolved) {
       return NextResponse.json({ error: "Bundle no válido." }, { status: 400 });
     }
+    const { product, bundle } = resolved;
 
-    // ── Verificar precio real en Supabase antes de cobrar — el precio del mock
-    //    (BUNDLES) es solo lo que ve el cliente; el importe que se cobra sale
-    //    siempre de la fuente de verdad (bundles.precio), nunca del frontend ──
+    // ── Comprobación de stock — el ÚNICO dato de catálogo que sigue en
+    //    Supabase (product_stock, por slug), porque es estado mutable real,
+    //    no contenido editorial. El decremento real solo ocurre de forma
+    //    atómica en el webhook cuando se confirma el pago.
     let db: ReturnType<typeof createServiceClient>;
     try {
       db = createServiceClient();
@@ -84,70 +90,32 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Error interno del servidor." }, { status: 500 });
     }
 
-    const { data: bundleRow, error: bundleError } = await db
-      .from("bundles")
-      .select("id, product_id, cantidad, precio, activo")
-      .eq("cantidad", bundleId)
-      .eq("activo", true)
+    const { data: stockRow, error: stockError } = await db
+      .from("product_stock")
+      .select("stock")
+      .eq("product_slug", product.slug)
       .maybeSingle();
 
-    if (bundleError) {
-      console.error("[create-payment-intent] error consultando bundle:", bundleError.message);
+    if (stockError) {
+      console.error("[create-payment-intent] error consultando stock:", stockError.message);
       return NextResponse.json({ error: "Error interno del servidor." }, { status: 500 });
     }
 
-    if (!bundleRow) {
-      return NextResponse.json(
-        { error: "El bundle solicitado no está disponible actualmente." },
-        { status: 400 }
-      );
-    }
-
-    const { data: productRow, error: productError } = await db
-      .from("products")
-      .select("id, precio, activo, stock")
-      .eq("id", bundleRow.product_id)
-      .eq("activo", true)
-      .maybeSingle();
-
-    if (productError) {
-      console.error("[create-payment-intent] error consultando producto:", productError.message);
-      return NextResponse.json({ error: "Error interno del servidor." }, { status: 500 });
-    }
-
-    if (!productRow) {
-      return NextResponse.json(
-        { error: "El producto asociado al bundle no está disponible." },
-        { status: 400 }
-      );
-    }
-
-    // ── Comprobación de stock (sin bloqueo) — el decremento real solo ocurre
-    //    de forma atómica en el webhook cuando se confirma el pago ───────────
-    const unidadesStock = Number(bundleRow.cantidad);
-    if (productRow.stock < unidadesStock) {
+    const stockDisponible = stockRow?.stock ?? 0;
+    if (stockDisponible < bundle.cantidad) {
       return NextResponse.json(
         { error: "No hay stock suficiente para este bundle." },
         { status: 400 }
       );
     }
 
-    const realPriceCents = Math.round(Number(bundleRow.precio) * 100);
-    if (realPriceCents !== bundle.priceInCents) {
-      console.error(
-        `[create-payment-intent] precio no coincide — mock: ${bundle.priceInCents}c, Supabase: ${realPriceCents}c (bundleId=${bundleId})`
-      );
-      return NextResponse.json(
-        { error: "El precio del bundle no coincide con el precio real. Pago rechazado." },
-        { status: 400 }
-      );
-    }
+    const realPriceCents = Math.round(bundle.precio * 100);
 
     const paymentIntent = await stripe.paymentIntents.create({
       amount: realPriceCents,
       currency: "eur",
       capture_method: "automatic",
-      metadata: { bundleId: String(bundleId), bundleName: bundle.name },
+      metadata: { bundleId: String(bundleId), bundleName: bundle.nombre, productSlug: product.slug },
     });
 
     return NextResponse.json(

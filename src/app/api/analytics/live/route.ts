@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
 import { isCurrentUserAdmin } from '@/lib/supabase-server'
 import { analyticsRatelimit, getClientIp } from '@/lib/rate-limit'
+import { getStoreInstanceId } from '@/lib/store-instance'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,6 +22,11 @@ export async function GET(req: NextRequest) {
   // Solo admin: expone sesiones activas, productos top y funnel de conversión
   if (!(await isCurrentUserAdmin())) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
+  }
+
+  const instanceId = getStoreInstanceId()
+  if (!instanceId) {
+    return NextResponse.json({ error: 'Servicio no configurado' }, { status: 503 })
   }
 
   // Rate limit: 30 peticiones por IP por minuto (Upstash Redis)
@@ -48,11 +54,33 @@ export async function GET(req: NextRequest) {
     todayStart.setHours(0, 0, 0, 0)
 
     // ─── Sesiones activas (últimos 5 min) ────────────────────────────────────
-    const { data: activeSessionsRaw, error: sessionsError } = await supabase
-      .from('tracking_sessions')
-      .select('id, user_id, device_type')
+    // Basado en actividad reciente (tracking_page_views), no en
+    // tracking_sessions.created_at: las sesiones se reutilizan entre visitas
+    // (cookie/localStorage), así que created_at es la fecha de la primera
+    // visita, no la actividad reciente — mismo bug y mismo fix que
+    // /api/dashboard/stats. ended_at tampoco filtraba nada: ningún UPDATE de
+    // este repo lo escribe jamás.
+    const { data: recentViewsRaw, error: viewsError } = await supabase
+      .from('tracking_page_views')
+      .select('session_id, tracking_sessions!inner(store_instance_id)')
+      .eq('tracking_sessions.store_instance_id', instanceId)
       .gte('created_at', fiveMinutesAgo)
-      .or(`ended_at.is.null,ended_at.gte.${fiveMinutesAgo}`)
+      .limit(2000)
+
+    if (viewsError) throw viewsError
+
+    const activeSessionIds = Array.from(new Set((recentViewsRaw ?? []).map((v) => v.session_id)))
+
+    // Sin filtro de store_instance_id aquí: activeSessionIds ya viene
+    // exclusivamente de sesiones que pasaron ese filtro arriba (join !inner
+    // sobre tracking_page_views) — repetirlo sería redundante.
+    const { data: activeSessionsRaw, error: sessionsError } =
+      activeSessionIds.length > 0
+        ? await supabase
+            .from('tracking_sessions')
+            .select('id, user_id, device_type')
+            .in('id', activeSessionIds)
+        : { data: [] as { id: string; user_id: string | null; device_type: string | null }[], error: null }
 
     if (sessionsError) throw sessionsError
 
@@ -67,7 +95,8 @@ export async function GET(req: NextRequest) {
     // ─── Top páginas (últimos 5 min) ─────────────────────────────────────────
     const { data: topPagesRaw, error: pagesError } = await supabase
       .from('tracking_page_views')
-      .select('path, created_at')
+      .select('path, created_at, tracking_sessions!inner(store_instance_id)')
+      .eq('tracking_sessions.store_instance_id', instanceId)
       .gte('created_at', fiveMinutesAgo)
       .order('created_at', { ascending: false })
       .limit(200)
@@ -92,7 +121,8 @@ export async function GET(req: NextRequest) {
     // ─── Top productos hoy ───────────────────────────────────────────────────
     const { data: topProductsRaw, error: productsError } = await supabase
       .from('tracking_product_views')
-      .select('product_id, product_slug, duration_seconds')
+      .select('product_id, product_slug, duration_seconds, tracking_sessions!inner(store_instance_id)')
+      .eq('tracking_sessions.store_instance_id', instanceId)
       .gte('created_at', todayStart.toISOString())
 
     if (productsError) throw productsError
@@ -128,11 +158,32 @@ export async function GET(req: NextRequest) {
     // ─── Funnel hoy ──────────────────────────────────────────────────────────
     const [sessionsRes, productViewsRes, cartsRes, checkoutsRes, conversionsRes] =
       await Promise.all([
-        supabase.from('tracking_sessions').select('id', { count: 'exact', head: true }).gte('created_at', todayStart.toISOString()),
-        supabase.from('tracking_product_views').select('session_id', { count: 'exact', head: true }).gte('created_at', todayStart.toISOString()),
-        supabase.from('tracking_cart_actions').select('session_id', { count: 'exact', head: true }).eq('action', 'add').gte('created_at', todayStart.toISOString()),
-        supabase.from('tracking_checkouts').select('id', { count: 'exact', head: true }).gte('created_at', todayStart.toISOString()),
-        supabase.from('tracking_conversions').select('id', { count: 'exact', head: true }).gte('created_at', todayStart.toISOString()),
+        supabase
+          .from('tracking_sessions')
+          .select('id', { count: 'exact', head: true })
+          .eq('store_instance_id', instanceId)
+          .gte('created_at', todayStart.toISOString()),
+        supabase
+          .from('tracking_product_views')
+          .select('session_id, tracking_sessions!inner(store_instance_id)', { count: 'exact', head: true })
+          .eq('tracking_sessions.store_instance_id', instanceId)
+          .gte('created_at', todayStart.toISOString()),
+        supabase
+          .from('tracking_cart_actions')
+          .select('session_id, tracking_sessions!inner(store_instance_id)', { count: 'exact', head: true })
+          .eq('tracking_sessions.store_instance_id', instanceId)
+          .eq('action', 'add')
+          .gte('created_at', todayStart.toISOString()),
+        supabase
+          .from('tracking_checkouts')
+          .select('id, tracking_sessions!inner(store_instance_id)', { count: 'exact', head: true })
+          .eq('tracking_sessions.store_instance_id', instanceId)
+          .gte('created_at', todayStart.toISOString()),
+        supabase
+          .from('tracking_conversions')
+          .select('id, tracking_sessions!inner(store_instance_id)', { count: 'exact', head: true })
+          .eq('tracking_sessions.store_instance_id', instanceId)
+          .gte('created_at', todayStart.toISOString()),
       ])
 
     const funnel = {

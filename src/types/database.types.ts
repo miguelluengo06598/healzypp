@@ -102,14 +102,17 @@ export interface OrderRow {
 export interface OrderItemRow {
   id: string
   order_id: string
+  /** DORMANTE — siempre null desde la unificación del catálogo. Usa product_slug. */
   product_id: string | null
+  /** Identificador real del producto (src/data/catalog.ts) — el webhook agrupa por esto para decrementar product_stock. */
+  product_slug: string | null
   variant_id: string | null
   nombre_producto: string
   imagen_producto: string | null
   cantidad: number
   precio_unitario: number
   precio_total: number
-  /** Unidades reales de stock (botes) a descontar de products.stock — bundle.cantidad × cantidad */
+  /** Unidades reales de stock (botes) a descontar de product_stock — bundle.cantidad × cantidad */
   unidades_stock: number | null
 }
 

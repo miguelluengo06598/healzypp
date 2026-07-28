@@ -81,25 +81,29 @@ export async function POST(req: NextRequest) {
         }
 
         // ── Decremento atómico de stock — solo aquí, tras confirmarse el pago ──
+        // Agrupa por product_slug (src/data/catalog.ts), no por product_id:
+        // desde la unificación del catálogo, product_id ya no se rellena
+        // (la tabla products está dormante) — product_slug es el
+        // identificador real que decrement_product_stock() espera.
         if (order?.order_items?.length) {
           const stockByProduct = new Map<string, number>();
           for (const item of order.order_items) {
-            if (!item.product_id || !item.unidades_stock) continue;
+            if (!item.product_slug || !item.unidades_stock) continue;
             stockByProduct.set(
-              item.product_id,
-              (stockByProduct.get(item.product_id) ?? 0) + item.unidades_stock
+              item.product_slug,
+              (stockByProduct.get(item.product_slug) ?? 0) + item.unidades_stock
             );
           }
-          for (const [productId, qty] of stockByProduct) {
-            const decremented = await decrementProductStock(productId, qty);
+          for (const [productSlug, qty] of stockByProduct) {
+            const decremented = await decrementProductStock(productSlug, qty);
             if (!decremented) {
               console.error(
-                `[stripe-webhook] Stock insuficiente al decrementar producto ${productId} (qty=${qty}) para el pedido ${order.numero_pedido} — venta ya cobrada, requiere revisión manual.`
+                `[stripe-webhook] Stock insuficiente al decrementar producto ${productSlug} (qty=${qty}) para el pedido ${order.numero_pedido} — venta ya cobrada, requiere revisión manual.`
               );
               sendPushover({
                 title: "⚠️ Posible sobreventa de stock",
                 message:
-                  `Pedido #${order.numero_pedido} ya cobrado, pero el stock del producto ${productId} ` +
+                  `Pedido #${order.numero_pedido} ya cobrado, pero el stock del producto ${productSlug} ` +
                   `no alcanzaba para descontar ${qty} unidades. Revisar inventario manualmente.`,
                 priority: 1,
                 sound: "falling",
@@ -132,6 +136,9 @@ export async function POST(req: NextRequest) {
                 ? (so.direccion_envio as any)?.ciudad ?? ""
                 : String(so.direccion_envio ?? "");
 
+            // Criterio de PII: nombre + ciudad, sin email — no hace falta
+            // contactar al cliente en un pago que ya salió bien. Ver el
+            // criterio inverso (con email) en el handler payment_failed.
             sendPushover({
               title: "💳 Pago con tarjeta recibido",
               message:
@@ -147,6 +154,16 @@ export async function POST(req: NextRequest) {
             }).catch((e) => console.error("[stripe-webhook] Pushover CONFIRMED error:", e));
 
             // Meta CAPI Purchase — event_id determinístico para deduplicar con el browser
+            // content_ids: el flujo de "comprar 1 bundle" guarda un único
+            // bundleId en metadata; el flujo de carrito guarda una lista
+            // compacta en metadata.content_ids (ver
+            // api/checkout/create-payment-intent/route.ts, buildContentIdsMetadata).
+            const contentIds = pi.metadata?.bundleId
+              ? [pi.metadata.bundleId]
+              : pi.metadata?.content_ids
+                ? pi.metadata.content_ids.split(',').filter(Boolean)
+                : [];
+
             sendPurchaseCAPI({
               orderNumber: so.numero_pedido ?? pi.id,
               email:       order?.email_cliente ?? null,
@@ -154,7 +171,7 @@ export async function POST(req: NextRequest) {
               firstName:   order?.nombre_cliente?.split(' ')[0] ?? null,
               lastName:    order?.nombre_cliente?.split(' ').slice(1).join(' ') ?? null,
               totalEur:    Number(so.total ?? pi.amount / 100),
-              contentIds:  pi.metadata?.bundleId ? [pi.metadata.bundleId] : [],
+              contentIds,
             }).catch((e) => console.error("[stripe-webhook] CAPI Purchase error:", e));
           }
         }
@@ -180,10 +197,14 @@ export async function POST(req: NextRequest) {
           failureReason,
         }).catch((e) => console.error("[stripe-webhook] ntfy FAILED error:", e));
 
-        // Pushover
+        // Pushover — criterio de PII: igual que en el pago confirmado (nombre,
+        // sin dirección completa), MÁS el email. A diferencia del pago
+        // confirmado (donde el email no aporta nada accionable), aquí hace
+        // falta para poder contactar al cliente y ayudarle a reintentar.
         sendPushover({
           title: "❌ Pago con tarjeta fallido",
           message:
+            `👤 ${order?.nombre_cliente ?? "Desconocido"}\n` +
             `💳 Tarjeta rechazada\n` +
             `📧 ${pi.receipt_email ?? "email desconocido"}\n` +
             `💰 Importe: ${(pi.amount / 100).toFixed(2)}€\n` +

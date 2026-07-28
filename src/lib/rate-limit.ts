@@ -118,6 +118,20 @@ export const analyticsRatelimit = makeRatelimit(30, "1 m");
 /** POST /api/meta/capi */
 export const metaCapiRatelimit = makeRatelimit(100, "1 m");
 
+/** GET /api/dashboard/stats y el resto de dashboard/* (salvo orders/[id], que tiene el suyo abajo) — por token, no por IP */
+export const dashboardApiRatelimit = makeRatelimit(60, "1 m");
+
+/**
+ * GET /api/dashboard/orders/[id] — dedicado y más estricto que el general de
+ * arriba: esta es la única respuesta de dashboard/* con PII (nombre, email,
+ * teléfono, dirección de un cliente final), así que un límite compartido con
+ * el resto de endpoints (solo cifras agregadas) no reflejaba el riesgo
+ * distinto. 30/min por token es de sobra para uso normal (un humano abriendo
+ * pedidos uno a uno desde el dashboard) y corta un barrido rápido de IDs de
+ * pedido con un token válido.
+ */
+export const orderDetailRatelimit = makeRatelimit(30, "1 m");
+
 // ─── Helpers de extracción de IP ─────────────────────────────────────────────
 
 export function getClientIp(request: NextRequest): string {

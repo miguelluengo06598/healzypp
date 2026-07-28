@@ -32,7 +32,7 @@ export type ShippingMethod = {
 export type CouponState = {
   code: string
   discount: number  // euros
-  type: "fixed" | "percentage"
+  type: "fijo" | "porcentaje" | "envio_gratis"
   percentageOff?: number
 }
 

@@ -10,6 +10,14 @@
 // panel admin propio en la app al que enlazar.
 import { SITE_NAME } from '@/lib/site'
 
+// Los headers HTTP solo aceptan ByteString (Latin-1) — un emoji directo en
+// 'Title' rompe fetch() con "Cannot convert argument to a ByteString".
+// ntfy soporta UTF-8 en headers vía RFC 2047 encoded-word: ver
+// https://docs.ntfy.sh/publish/#e-mail-style-headers
+function encodeNtfyHeader(value: string): string {
+  return `=?UTF-8?B?${Buffer.from(value, 'utf-8').toString('base64')}?=`
+}
+
 export interface OrderNotificationData {
   orderNumber: string
   totalEuros: number
@@ -45,7 +53,7 @@ export async function sendOrderNotification(data: OrderNotificationData): Promis
     const res = await fetch(`https://ntfy.sh/${encodeURIComponent(topic)}`, {
       method: 'POST',
       headers: {
-        'Title': title,
+        'Title': encodeNtfyHeader(title),
         'Priority': priority,
         'Tags': tags,
       },
