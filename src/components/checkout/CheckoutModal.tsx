@@ -662,43 +662,64 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ open, onOpenChange }) => 
   const [paymentIntentId,     setPaymentIntentId]     = useState<string | null>(null);
   const [clientSecretLoading, setClientSecretLoading] = useState(false);
   const [error,               setError]               = useState<string | null>(null);
-  const clientSecretCache = useRef<Record<number, { clientSecret: string; paymentIntentId: string }>>({});
+  // Cachea la PROMESA en vuelo, no el resultado. La entrada se escribe de forma
+  // SÍNCRONA antes de lanzar el fetch: antes solo se poblaba al resolver, así que
+  // la doble invocación del efecto (React StrictMode en desarrollo, o cualquier
+  // reapertura rápida) encontraba la caché vacía las dos veces y creaba DOS
+  // PaymentIntents. El pedido guardaba uno y se cobraba el otro, de modo que el
+  // webhook no encontraba pedido para el PI cobrado: ni descontaba stock, ni
+  // enviaba Pushover, ni el Purchase a CAPI.
+  const clientSecretCache = useRef<
+    Record<number, Promise<{ clientSecret: string; paymentIntentId: string }>>
+  >({});
 
   useEffect(() => {
     if (!open) return;
     const b = getStoredBundle();
     setBundle(b);
     setError(null);
+    if (!b) return;
 
-    if (b) {
-      const cached = clientSecretCache.current[b.id];
-      if (cached) {
-        setClientSecret(cached.clientSecret);
-        setPaymentIntentId(cached.paymentIntentId);
-        return;
-      }
-      setClientSecretLoading(true);
-      fetch("/api/create-payment-intent", {
+    let cancelado = false;
+
+    let pendiente = clientSecretCache.current[b.id];
+    if (!pendiente) {
+      pendiente = fetch("/api/create-payment-intent", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({ bundleId: b.id }),
-      })
-        .then(async res => {
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.error || "Error del servidor");
-          clientSecretCache.current[b.id] = {
-            clientSecret: data.clientSecret,
-            paymentIntentId: data.paymentIntentId,
-          };
-          setClientSecret(data.clientSecret);
-          setPaymentIntentId(data.paymentIntentId);
-        })
-        .catch(err => {
-          console.error("[CheckoutModal] Error cargando clientSecret:", err);
-          setError("Hubo un problema al iniciar el pago. Inténtalo de nuevo.");
-        })
-        .finally(() => setClientSecretLoading(false));
+      }).then(async res => {
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Error del servidor");
+        return {
+          clientSecret:    data.clientSecret as string,
+          paymentIntentId: data.paymentIntentId as string,
+        };
+      });
+      // Síncrono, antes de ceder el control: la segunda invocación ya la ve.
+      clientSecretCache.current[b.id] = pendiente;
     }
+
+    setClientSecretLoading(true);
+    pendiente
+      .then(({ clientSecret, paymentIntentId }) => {
+        if (cancelado) return;
+        setClientSecret(clientSecret);
+        setPaymentIntentId(paymentIntentId);
+      })
+      .catch(err => {
+        // Retirar la promesa fallida para poder reintentar al reabrir el modal;
+        // si se quedara cacheada, el error sería permanente en esta sesión.
+        delete clientSecretCache.current[b.id];
+        if (cancelado) return;
+        console.error("[CheckoutModal] Error cargando clientSecret:", err);
+        setError("Hubo un problema al iniciar el pago. Inténtalo de nuevo.");
+      })
+      .finally(() => {
+        if (!cancelado) setClientSecretLoading(false);
+      });
+
+    return () => { cancelado = true; };
   }, [open]);
 
   const handleError = useCallback((msg: string) => setError(msg || null), []);
