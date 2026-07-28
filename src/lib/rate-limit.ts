@@ -139,10 +139,28 @@ function memoryLimit(id: string, requests: number, windowMs: number) {
   }
 }
 
+/** Techo duro de espera antes de caer al contador en memoria. */
+const STRICT_TIMEOUT_MS = 1200
+
+// Cliente propio, NO el compartido de arriba: el de por defecto reintenta 5
+// veces con backoff exponencial (Math.exp(n)*50 ms ≈ 4,3 s en total), que es
+// justo lo que medimos con Redis caído. Aquí interesa fallar rápido y pasar al
+// contador en memoria, porque hay un respaldo real esperando. El cliente
+// compartido se queda como está: sus consumidores (checkout) prefieren
+// insistir antes que rendirse.
+const strictRedis =
+  REDIS_URL && REDIS_TOKEN
+    ? new Redis({
+        url: REDIS_URL,
+        token: REDIS_TOKEN,
+        retry: { retries: 1, backoff: () => 100 },
+      })
+    : null
+
 function makeStrictRatelimit(requests: number, window: string, windowMs: number) {
-  const rl = redis
+  const rl = strictRedis
     ? new Ratelimit({
-        redis,
+        redis: strictRedis,
         limiter: Ratelimit.fixedWindow(
           requests,
           window as Parameters<typeof Ratelimit.fixedWindow>[1]
@@ -155,10 +173,18 @@ function makeStrictRatelimit(requests: number, window: string, windowMs: number)
     limit: async (id: string) => {
       if (rl) {
         try {
-          return await rl.limit(id)
+          // Promise.race además de los reintentos acotados: el techo no depende
+          // de cómo se comporte el cliente por dentro (una conexión que se
+          // queda colgada sin error no dispara ningún retry).
+          return await Promise.race([
+            rl.limit(id),
+            new Promise<never>((_, reject) =>
+              setTimeout(() => reject(new Error(`timeout tras ${STRICT_TIMEOUT_MS}ms`)), STRICT_TIMEOUT_MS)
+            ),
+          ])
         } catch (err) {
           console.error(
-            "[ratelimit:strict] Redis error — usando contador en memoria:",
+            "[ratelimit:strict] Redis no disponible — usando contador en memoria:",
             err instanceof Error ? err.message : String(err)
           )
         }
