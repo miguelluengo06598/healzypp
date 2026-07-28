@@ -159,6 +159,14 @@ export function findBundleBySku(
   return undefined
 }
 
+/** content_id numérico de Meta para un sku. Lo usa el checkout de carrito
+ *  para que su InitiateCheckout hable de los mismos ids que el Purchase que
+ *  luego envía el webhook (ver docs/diseno-catalogo-multi-producto.md,
+ *  Decisión 1: hacia Meta viaja el id numérico, no el sku). */
+export function getBundleIdBySku(sku: string): number | undefined {
+  return findBundleBySku(sku)?.bundle.id
+}
+
 /** Nombre cualificado para carrito y resúmenes de pedido:
  *  "Gominolas de Jengibre — 2 Botes". Derivado a propósito, nunca escrito a
  *  mano en el catálogo: duplicar el nombre del producto en cada bundle haría

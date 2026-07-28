@@ -28,6 +28,7 @@ import Rating from "@/components/ui/Rating";
 import { cn } from "@/lib/utils";
 import { integralCF } from "@/styles/fonts";
 import { useProductPreview } from "./ProductPreviewContext";
+import { useMetaPixel } from "@/hooks/useMetaPixel";
 import { useAppDispatch } from "@/lib/hooks/redux";
 import { addToCart } from "@/lib/features/carts/cartsSlice";
 import { productPath } from "@/lib/site";
@@ -219,6 +220,7 @@ const useWishlistState = (productId: number) => {
 const QuickProductPreviewModal: React.FC = () => {
   const { selectedProduct, isOpen, closePreview } = useProductPreview();
   const dispatch = useAppDispatch();
+  const { trackAddToCart } = useMetaPixel();
 
   /* Bundle state — same as PDP */
   const [selectedBundleIdx, setSelectedBundleIdx] = useState(0);
@@ -265,8 +267,18 @@ const QuickProductPreviewModal: React.FC = () => {
         quantity: 1,
       })
     );
+
+    // Mismo criterio que ProductCard: la señal se emite al añadir de verdad,
+    // con bundle.id como content_id para que case con el Purchase.
+    trackAddToCart({
+      id: selectedBundle.id,
+      slug: selectedProduct.slug,
+      name: selectedBundle.displayName,
+      price: bundlePrice,
+    });
+
     closePreview();
-  }, [dispatch, selectedProduct, selectedBundle, bundlePrice, closePreview]);
+  }, [dispatch, selectedProduct, selectedBundle, bundlePrice, closePreview, trackAddToCart]);
 
   if (!selectedProduct) return null;
 

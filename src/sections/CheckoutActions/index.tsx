@@ -22,7 +22,7 @@ const CheckoutActions: React.FC<CheckoutActionsProps> = ({ data }) => {
   const [bundle, setBundle] = useState<Bundle | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [modalMounted, setModalMounted] = useState(false);
-  const { trackAddToCart, trackInitiateCheckout } = useMetaPixel();
+  const { trackInitiateCheckout } = useMetaPixel();
   // MobileBottomNavigation (72px, z-50) vive en bottom-0 y se oculta al bajar;
   // esta barra lee la misma señal de scroll para apilarse encima cuando el nav
   // es visible y bajar a bottom-0 cuando se esconde — sin solaparse nunca.
@@ -51,14 +51,17 @@ const CheckoutActions: React.FC<CheckoutActionsProps> = ({ data }) => {
     setBundle(b);
     setModalMounted(true);
     setModalOpen(true);
-    trackAddToCart({ id: data.id, name: data.title, price: b.priceInCents / 100 });
+    // Solo InitiateCheckout: abrir el modal de pago ES iniciar el checkout.
+    // Aquí también se disparaba AddToCart, que era el momento equivocado —
+    // el "añadir al carrito" de verdad ocurre en ProductCard y en el modal de
+    // vista rápida, que ahora sí lo emiten.
     trackInitiateCheckout({
       value: b.priceInCents / 100,
       currency: "EUR",
       items: [
         {
-          id: data.id,
-          name: `${data.title} — ${b.name}`,
+          id: b.id,
+          name: b.displayName,
           quantity: 1,
           price: b.priceInCents / 100,
         },
