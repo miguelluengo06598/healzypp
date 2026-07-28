@@ -105,6 +105,8 @@ export default async function ProductPage({
   // catálogo en código que usa el endpoint de pago para cobrar, así que no
   // puede divergir de lo que se cobra.
   const productBundles = getBundlesForProduct(productData.slug);
+  const bundlePorDefecto =
+    productBundles.find((b) => b.popular) ?? productBundles[0];
   const entryPriceEur = (
     Math.min(...productBundles.map((b) => b.priceInCents)) / 100
   ).toFixed(2);
@@ -161,11 +163,15 @@ export default async function ProductPage({
           así que slug[0] es el ID. Se estaba mandando "1" como slug del
           producto a ambos trackers. */}
       <ProductPageTracker productId={productData.id} productSlug={productData.slug} />
+      {/* El pack preseleccionado en la ficha (el `popular`, o el primero) —
+          mismo criterio que BundleSelection. Es el que compraría quien pulse
+          "Pagar con Tarjeta" sin cambiar nada, así que es el content_id que
+          mejor correlaciona con el Purchase posterior. */}
       <ProductMetaTracker
-        productId={productData.id}
+        bundleId={bundlePorDefecto.id}
         productSlug={productData.slug}
-        productName={productData.title}
-        price={productData.price}
+        bundleName={bundlePorDefecto.displayName}
+        price={bundlePorDefecto.priceInCents / 100}
       />
 
       <ProductSectionWrapper section="hero">
