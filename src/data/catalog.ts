@@ -100,38 +100,14 @@ export const CATALOG: CatalogProduct[] = [
       { sku: "gominolas-vinagre-manzana-x3", id: 3, cantidad: 3, nombre: "3 Botes", precio: 59.99, precioOriginal: 89.97, popular: false },
     ],
   },
-  {
-    id: 2,
-    slug: "gominolas-jengibre",
-    nombre: "Gominolas de Jengibre",
-    descripcion:
-      "Gominolas naturales elaboradas con jengibre. Favorecen la digestión, ayudan a reducir la sensación de pesadez y aportan energía a lo largo del día. 60 unidades por bote. Aptas para veganos y sin gluten.",
-    descripcionCorta: "60 gominolas de jengibre natural, digestión y energía.",
-    // PLACEHOLDER: reutiliza la imagen del producto de vinagre porque todavía
-    // no hay fotos reales de jengibre en public/images/. Sustituir en cuanto
-    // existan — hoy la ficha muestra el bote equivocado.
-    imagenes: ["/images/FL1.png"],
-    categoria: "Suplementos",
-    metaTitle: "Gominolas de Jengibre | Natural y Vegano",
-    metaDescription:
-      "Compra gominolas de jengibre natural. Favorecen la digestión y aportan energía. Envío gratis.",
-    // PLACEHOLDER, igual que la descripción y la imagen: reclamos calcados del
-    // producto de vinagre. Revisar antes de publicar nada de verdad.
-    beneficios: [
-      "Con jengibre natural",
-      "100% veganas",
-      "Sin azúcares añadidos",
-      "Favorece la digestión",
-      "Apoya el bienestar",
-      "Sabor delicioso",
-    ],
-    bundles: [
-      { sku: "gominolas-jengibre-x1", id: 4, cantidad: 1, nombre: "1 Bote", precio: 24.99, popular: false },
-      { sku: "gominolas-jengibre-x2", id: 5, cantidad: 2, nombre: "2 Botes", precio: 44.99, precioOriginal: 49.98, popular: true },
-      { sku: "gominolas-jengibre-x3", id: 6, cantidad: 3, nombre: "3 Botes", precio: 59.99, precioOriginal: 74.97, popular: false },
-    ],
-  },
 ]
+
+// Hubo aquí un segundo producto de prueba ("Gominolas de Jengibre", id 2,
+// bundles 4/5/6) que sirvió para verificar el soporte multi-producto: se
+// retiró porque no era un producto real (sin fotos propias y con textos de
+// relleno). La arquitectura multi-producto se queda: añade el siguiente
+// producto siguiendo AÑADIR-PRODUCTO.md — el id 2 y los ids de bundle 4/5/6
+// vuelven a estar libres.
 
 // ─── Validación de unicidad — se ejecuta al importar el módulo ─────────────
 // Falla ruidosamente en cuanto se añade un identificador repetido, en vez de
