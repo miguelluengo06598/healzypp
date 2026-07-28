@@ -68,6 +68,7 @@ async function getVerifiedItemPrice(
   discountEur: number
   title: string
   productSlug: string
+  bundleId: number
   unidadesStock: number
   stockDisponible: number
 } | null> {
@@ -92,9 +93,25 @@ async function getVerifiedItemPrice(
     discountEur: 0,
     title: `${product.nombre} — ${bundle.nombre}`,
     productSlug: product.slug,
+    bundleId: bundle.id,
     unidadesStock: bundle.cantidad * quantity,
     stockDisponible: stockRow?.stock ?? 0,
   }
+}
+
+/** Compacta los bundleId del carrito para caber en el límite de 500 caracteres
+ *  de un valor de metadata de Stripe (ver api/create-payment-intent/route.ts,
+ *  que usa el mismo bundleId como content_id en el Purchase de CAPI). Dedupe
+ *  porque content_ids identifica QUÉ se compró, no cuántas unidades. */
+function buildContentIdsMetadata(bundleIds: number[]): string {
+  const unique = Array.from(new Set(bundleIds)).map(String)
+  let result = ""
+  for (const id of unique) {
+    const next = result ? `${result},${id}` : id
+    if (next.length > 500) break
+    result = next
+  }
+  return result
 }
 
 export async function POST(req: NextRequest) {
@@ -105,7 +122,16 @@ export async function POST(req: NextRequest) {
 
   // Rate limit
   const ip = getClientIp(req)
-  const { success: allowed } = await paymentIntentRatelimit.limit(ip)
+  // Igual que en api/create-payment-intent/route.ts: si Redis no responde no
+  // debe tumbar el checkout, se deja pasar la petición.
+  let allowed = true
+  try {
+    const result = await paymentIntentRatelimit.limit(ip)
+    allowed = result.success
+  } catch (err) {
+    console.error("[ratelimit] Redis error, skipping:", err)
+    allowed = true
+  }
   if (!allowed) {
     return NextResponse.json({ error: "Demasiados intentos. Inténtalo más tarde." }, { status: 429 })
   }
@@ -133,8 +159,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Método de envío no válido." }, { status: 400 })
   }
 
-  // Server-verify all product prices contra Supabase — sin fallback al precio
-  // del frontend si algún item no coincide con un bundle/producto real
+  // Server-verify todos los precios contra el catálogo en código
+  // (src/data/catalog.ts, modelo híbrido) — sin fallback al precio del
+  // frontend si algún item no coincide con un bundle/producto real. Supabase
+  // solo se consulta aquí para el stock (product_stock), no para el precio.
   let db: ReturnType<typeof createServiceClient>
   try {
     db = createServiceClient()
@@ -151,6 +179,11 @@ export async function POST(req: NextRequest) {
     discountEur: number
     unidadesStock: number
   }> = []
+
+  // Bundle ids reales del carrito — se guardan en metadata del PaymentIntent
+  // para que el webhook pueda construir content_ids en el Purchase de CAPI
+  // (mismo patrón que ya usa el flujo de "comprar 1 bundle" con bundleId).
+  const bundleIdsInCart: number[] = []
 
   // Todo el cálculo monetario en CÉNTIMOS (enteros) — sumar euros float
   // arrastra error binario; el amount de Stripe debe ser un entero limpio.
@@ -178,6 +211,7 @@ export async function POST(req: NextRequest) {
       discountEur: verified.discountEur,
       unidadesStock: verified.unidadesStock,
     })
+    bundleIdsInCart.push(verified.bundleId)
     subtotalCents += eurosToCents(verified.unitPriceEur) * item.quantity
 
     stockNeededByProduct.set(
@@ -290,6 +324,7 @@ export async function POST(req: NextRequest) {
         order_id: orderResult.orderId,
         order_number: orderResult.orderNumber,
         email,
+        content_ids: buildContentIdsMetadata(bundleIdsInCart),
       },
     })
 
