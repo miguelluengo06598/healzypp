@@ -3,29 +3,44 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { cn } from "@/lib/utils";
 import {
-  BUNDLES,
-  BASE_UNIT_PRICE_EUR,
   calcSavings,
   calcDiscountPct,
   calcUnitPrice,
+  getStrikePriceEur,
   formatPriceEur,
+  type Bundle,
 } from "@/lib/bundles";
-import { getBundleTitle, SELECTED_BUNDLE_STORAGE_KEY } from "./data";
-import type { BundleId } from "./types";
+import { selectedBundleStorageKey } from "@/components/checkout/OrderSummary";
+import { getBundleTitle } from "./data";
+import type { BundleSku } from "./types";
 
-const BundleSelection = () => {
-  const [selected, setSelected] = useState<BundleId>(2);
-  const [bounceId, setBounceId] = useState<number | null>(null);
+interface BundleSelectionProps {
+  /** Packs DE ESTE producto. Antes se leía una lista global que solo contenía
+   *  los del primer producto del catálogo. */
+  bundles: Bundle[];
+  productSlug: string;
+}
+
+const BundleSelection: React.FC<BundleSelectionProps> = ({ bundles, productSlug }) => {
+  const porDefecto = bundles.find((b) => b.popular) ?? bundles[0];
+  const [selected, setSelected] = useState<BundleSku>(porDefecto?.sku ?? "");
+  const [bounceSku, setBounceSku] = useState<BundleSku | null>(null);
 
   useEffect(() => {
-    localStorage.setItem(SELECTED_BUNDLE_STORAGE_KEY, JSON.stringify({ id: selected }));
-  }, [selected]);
+    if (!selected) return;
+    // Clave segregada por producto: elegir un pack aquí ya no arrastra la
+    // selección a la ficha de otro producto.
+    localStorage.setItem(
+      selectedBundleStorageKey(productSlug),
+      JSON.stringify({ sku: selected })
+    );
+  }, [selected, productSlug]);
 
-  const handleSelect = useCallback((id: number) => {
-    setSelected(id);
-    setBounceId(id);
+  const handleSelect = useCallback((sku: BundleSku) => {
+    setSelected(sku);
+    setBounceSku(sku);
     setTimeout(() => {
-      setBounceId((curr) => (curr === id ? null : curr));
+      setBounceSku((curr) => (curr === sku ? null : curr));
     }, 200);
   }, []);
 
@@ -34,18 +49,16 @@ const BundleSelection = () => {
       <span className="text-sm text-black/60 mb-3">Elige tu plan</span>
 
       <div className="flex flex-col gap-3">
-        {BUNDLES.map((bundle) => {
-          const isSelected = selected === bundle.id;
+        {bundles.map((bundle) => {
+          const isSelected = selected === bundle.sku;
           const isPopular = bundle.popular;
           const savings = calcSavings(bundle);
           const discountPct = calcDiscountPct(bundle);
-          const strikePrice = (BASE_UNIT_PRICE_EUR * bundle.id)
-            .toFixed(2)
-            .replace(".", ",");
+          const strikePrice = formatPriceEur(getStrikePriceEur(bundle));
 
           return (
             <div
-              key={bundle.id}
+              key={bundle.sku}
               className="relative"
               style={{ marginTop: isPopular ? 10 : undefined }}
             >
@@ -67,7 +80,7 @@ const BundleSelection = () => {
 
               <button
                 type="button"
-                onClick={() => handleSelect(bundle.id)}
+                onClick={() => handleSelect(bundle.sku)}
                 aria-pressed={isSelected}
                 className={cn(
                   "relative w-full text-left rounded-[16px] transition-all duration-150 ease-out",
@@ -75,7 +88,7 @@ const BundleSelection = () => {
                   isSelected
                     ? "border-[3px] border-[#1a4d1a] shadow-[0_4px_20px_rgba(45,106,45,0.35)]"
                     : "border-[2.5px] border-[#d1d5db] bg-white shadow-[0_1px_4px_rgba(0,0,0,0.06)] hover:border-[#2d6a2d] hover:shadow-[0_2px_12px_rgba(45,106,45,0.12)]",
-                  bounceId === bundle.id && "animate-card-bounce"
+                  bounceSku === bundle.sku && "animate-card-bounce"
                 )}
                 style={{
                   padding: "16px 20px",
@@ -94,7 +107,7 @@ const BundleSelection = () => {
                       )}
                       style={{ fontSize: 16, fontWeight: 600 }}
                     >
-                      {getBundleTitle(bundle)}
+                      {getBundleTitle(bundle, bundles)}
                     </p>
 
                     <div className="flex items-baseline gap-2 mt-1.5">
@@ -108,7 +121,7 @@ const BundleSelection = () => {
                       >
                         {bundle.price}
                       </span>
-                      {bundle.id > 1 && (
+                      {savings > 0 && (
                         <span
                           className={cn(
                             "line-through",

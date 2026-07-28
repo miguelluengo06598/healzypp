@@ -121,6 +121,10 @@ const MAPBOX_THEME_CSS = `
 export interface CheckoutModalProps {
   open: boolean;
   onOpenChange: (v: boolean) => void;
+  /** Producto cuya ficha abrió el modal. Es obligatorio porque el pack a
+   *  cobrar se resuelve contra ESTE producto: sin él se leía una selección
+   *  global y se podía cobrar el pack de otro producto. */
+  productSlug: string;
 }
 
 interface ShippingData {
@@ -656,7 +660,7 @@ function CardForm({
 /*  MAIN MODAL                                                                  */
 /* ═══════════════════════════════════════════════════════════════════════════ */
 
-const CheckoutModal: React.FC<CheckoutModalProps> = ({ open, onOpenChange }) => {
+const CheckoutModal: React.FC<CheckoutModalProps> = ({ open, onOpenChange, productSlug }) => {
   const [bundle,              setBundle]              = useState<Bundle | null>(null);
   const [clientSecret,        setClientSecret]        = useState<string | null>(null);
   const [paymentIntentId,     setPaymentIntentId]     = useState<string | null>(null);
@@ -675,7 +679,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ open, onOpenChange }) => 
 
   useEffect(() => {
     if (!open) return;
-    const b = getStoredBundle();
+    const b = getStoredBundle(productSlug);
     setBundle(b);
     setError(null);
     if (!b) return;
@@ -720,7 +724,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ open, onOpenChange }) => 
       });
 
     return () => { cancelado = true; };
-  }, [open]);
+  }, [open, productSlug]);
 
   const handleError = useCallback((msg: string) => setError(msg || null), []);
 

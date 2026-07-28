@@ -33,11 +33,12 @@ import { addToCart } from "@/lib/features/carts/cartsSlice";
 import { productPath } from "@/lib/site";
 import { Product } from "@/types/product.types";
 import {
-  BUNDLES,
+  getBundlesForProduct,
   calcSavings,
   calcDiscountPct,
   calcUnitPrice,
   getBundlePriceEur,
+  getStrikePriceEur,
   formatPriceEur,
 } from "@/lib/bundles";
 
@@ -220,30 +221,38 @@ const QuickProductPreviewModal: React.FC = () => {
   const dispatch = useAppDispatch();
 
   /* Bundle state — same as PDP */
-  const [selectedBundleIdx, setSelectedBundleIdx] = useState(1); // default 2 packs (popular)
+  const [selectedBundleIdx, setSelectedBundleIdx] = useState(0);
+
+  // Packs DE ESTE producto — antes se leía la lista global, que solo contenía
+  // los del primer producto del catálogo.
+  const bundles = useMemo(
+    () => (selectedProduct ? getBundlesForProduct(selectedProduct.slug) : []),
+    [selectedProduct?.slug] // eslint-disable-line react-hooks/exhaustive-deps
+  );
 
   /* Reset state when product changes */
   useEffect(() => {
     if (selectedProduct) {
-      setSelectedBundleIdx(1);
+      const idx = bundles.findIndex((b) => b.popular);
+      setSelectedBundleIdx(idx >= 0 ? idx : 0);
     }
-  }, [selectedProduct?.id]);
+  }, [selectedProduct?.id, bundles]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* Wishlist */
   const { isWishlisted, toggle: toggleWishlist } = useWishlistState(
     selectedProduct?.id ?? 0
   );
 
-  /* Selected bundle */
-  const selectedBundle = BUNDLES[selectedBundleIdx];
-  const bundlePrice = getBundlePriceEur(selectedBundle);
-  const savings = calcSavings(selectedBundle);
-  const discountPct = calcDiscountPct(selectedBundle);
-  const unitPrice = calcUnitPrice(selectedBundle);
+  /* Selected bundle — puede no haber ninguno mientras no hay producto abierto */
+  const selectedBundle = bundles[selectedBundleIdx] ?? bundles[0] ?? null;
+  const bundlePrice = selectedBundle ? getBundlePriceEur(selectedBundle) : 0;
+  const savings = selectedBundle ? calcSavings(selectedBundle) : 0;
+  const discountPct = selectedBundle ? calcDiscountPct(selectedBundle) : 0;
+  const unitPrice = selectedBundle ? calcUnitPrice(selectedBundle) : 0;
 
   /* Add to cart */
   const handleAddToCart = useCallback(() => {
-    if (!selectedProduct) return;
+    if (!selectedProduct || !selectedBundle) return;
     dispatch(
       addToCart({
         id: selectedProduct.id,
@@ -378,15 +387,15 @@ const QuickProductPreviewModal: React.FC = () => {
                 Elige tu pack
               </span>
               <div className="flex flex-col gap-2">
-                {BUNDLES.map((bundle, idx) => {
+                {bundles.map((bundle, idx) => {
                   const isSelected = selectedBundleIdx === idx;
                   const bSavings = calcSavings(bundle);
                   const bDiscount = calcDiscountPct(bundle);
-                  const bUnitTotal = (29.99 * bundle.id).toFixed(2);
+                  const bUnitTotal = getStrikePriceEur(bundle).toFixed(2);
 
                   return (
                     <motion.button
-                      key={bundle.id}
+                      key={bundle.sku}
                       type="button"
                       onClick={() => setSelectedBundleIdx(idx)}
                       whileTap={{ scale: 0.98 }}
@@ -474,7 +483,7 @@ const QuickProductPreviewModal: React.FC = () => {
                 </span>
                 {savings > 0 && (
                   <span className="text-lg text-black/40 line-through">
-                    €{formatPriceEur(29.99 * selectedBundle.id)}
+                    €{formatPriceEur(selectedBundle ? getStrikePriceEur(selectedBundle) : 0)}
                   </span>
                 )}
                 {savings > 0 && (
@@ -528,7 +537,7 @@ const QuickProductPreviewModal: React.FC = () => {
                   className="w-full h-11 rounded-full font-bold transition-all bg-brand hover:bg-brand-hover text-white shadow-[0_4px_14px_rgba(72,125,38,0.35)]"
                 >
                   <ShoppingBag className="w-4 h-4 mr-2" />
-                  Añadir {selectedBundle.name}
+                  Añadir {selectedBundle?.name ?? ""}
                 </Button>
               </motion.div>
 

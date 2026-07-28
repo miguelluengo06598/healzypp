@@ -8,6 +8,7 @@ import { FaCheck } from "react-icons/fa";
 import BundleSelection from "@/sections/BundleSelection";
 import DeliveryTimeline from "@/sections/DeliveryTimeline";
 import CheckoutActions from "@/sections/CheckoutActions";
+import { getBundlesForProduct } from "@/lib/bundles";
 import { defaultBenefitBubbles } from "./data";
 import type { ProductHeaderProps } from "./types";
 
@@ -60,7 +61,10 @@ const ProductHeader = ({
           </div>
           <hr className="h-[1px] border-t-black/10 mb-5" />
           {/* Cambio: sección de bundles en lugar de color + talla */}
-          <BundleSelection />
+          <BundleSelection
+            bundles={getBundlesForProduct(data.slug)}
+            productSlug={data.slug}
+          />
           <div className="mt-4">
             <DeliveryTimeline />
           </div>

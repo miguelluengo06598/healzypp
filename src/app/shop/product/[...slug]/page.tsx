@@ -10,7 +10,7 @@ import ProductMetaTracker from "@/components/tracking/ProductMetaTracker";
 import ProductSectionWrapper from "@/components/tracking/ProductSectionWrapper";
 import { notFound, permanentRedirect } from "next/navigation";
 import { SITE_NAME, SITE_URL, productPath, slugify } from "@/lib/site";
-import { BUNDLES } from "@/lib/bundles";
+import { getBundlesForProduct } from "@/lib/bundles";
 import type { Product } from "@/types/product.types";
 
 const data = newArrivalsData;
@@ -101,11 +101,13 @@ export default async function ProductPage({
 
   const canonicalUrl = `${SITE_URL}${productPath(productData.id, productData.title)}`;
 
-  // Precio de entrada (pack de 1 bote) desde BUNDLES — anclado a producción:
-  // el endpoint de pago rechaza cualquier cobro si este valor diverge de
-  // bundles.precio en Supabase, así que no puede quedarse desactualizado
-  // sin romper el checkout.
-  const entryPriceEur = (Math.min(...BUNDLES.map((b) => b.priceInCents)) / 100).toFixed(2);
+  // Precio de entrada: el pack más barato DE ESTE producto. Sale del mismo
+  // catálogo en código que usa el endpoint de pago para cobrar, así que no
+  // puede divergir de lo que se cobra.
+  const productBundles = getBundlesForProduct(productData.slug);
+  const entryPriceEur = (
+    Math.min(...productBundles.map((b) => b.priceInCents)) / 100
+  ).toFixed(2);
 
   const productJsonLd = {
     "@context": "https://schema.org",

@@ -34,6 +34,7 @@ import { eurosToCents, centsToEuros } from "@/lib/money";
 import { integralCF } from "@/styles/fonts";
 import { useAppSelector, useAppDispatch } from "@/lib/hooks/redux";
 import { RootState } from "@/lib/store";
+import { getProductById } from "@/data/catalog";
 import { productPath } from "@/lib/site";
 import {
   CartItem,
@@ -437,6 +438,18 @@ const MiniCartDrawer: React.FC<MiniCartDrawerProps> = ({
 
 const StickySmartCart: React.FC = () => {
   const { drawerOpen, setDrawerOpen, hasItems } = useSmartCart();
+  const { cart } = useAppSelector((state: RootState) => state.carts);
+
+  // CheckoutModal cobra UN pack de UN producto, así que necesita saber cuál.
+  // Aquí solo tenemos el carrito, que puede contener varios productos: se
+  // toma el del primer item. Es una limitación conocida de este camino, que
+  // además hoy está muerto (nada abre el drawer; el único camino vivo al
+  // modal es la ficha de producto). Si se reactiva, debería llevar al
+  // checkout de carrito (/checkout), no a este modal.
+  const primerItem = cart?.items?.[0];
+  const productSlug = primerItem
+    ? getProductById(primerItem.id)?.slug
+    : undefined;
 
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   // true tras la primera apertura y ya no vuelve a false: el chunk del modal
@@ -457,10 +470,11 @@ const StickySmartCart: React.FC = () => {
         }}
       />
 
-      {checkoutMounted && (
+      {checkoutMounted && productSlug && (
         <CheckoutModal
           open={checkoutOpen}
           onOpenChange={setCheckoutOpen}
+          productSlug={productSlug}
         />
       )}
     </>

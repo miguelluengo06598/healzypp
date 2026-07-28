@@ -35,6 +35,7 @@ const DECORACION_UI: Record<string, Partial<Product>> = {
 function toProduct(producto: CatalogProduct): Product {
   return {
     id: producto.id,
+    slug: producto.slug,
     title: producto.nombre,
     srcUrl: producto.imagenes[0],
     gallery: producto.imagenes,

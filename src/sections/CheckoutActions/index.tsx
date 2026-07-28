@@ -29,21 +29,25 @@ const CheckoutActions: React.FC<CheckoutActionsProps> = ({ data }) => {
   const scrollDir = useScrollDirection();
   const navVisible = scrollDir !== "down";
 
+  // Siempre el pack DEL PRODUCTO DE ESTA FICHA. Antes se leía una selección
+  // global, así que comprar desde la ficha de un producto podía cobrar el pack
+  // de otro.
   useEffect(() => {
-    setBundle(getStoredBundle());
-  }, []);
+    setBundle(getStoredBundle(data.slug));
+  }, [data.slug]);
 
   // Sync bundle when localStorage changes
   useEffect(() => {
     const interval = setInterval(() => {
-      const b = getStoredBundle();
-      setBundle((prev) => (prev?.id !== b.id ? b : prev));
+      const b = getStoredBundle(data.slug);
+      setBundle((prev) => (prev?.sku !== b?.sku ? b : prev));
     }, 500);
     return () => clearInterval(interval);
-  }, []);
+  }, [data.slug]);
 
   const openModal = () => {
-    const b = getStoredBundle();
+    const b = getStoredBundle(data.slug);
+    if (!b) return;
     setBundle(b);
     setModalMounted(true);
     setModalOpen(true);
@@ -104,6 +108,7 @@ const CheckoutActions: React.FC<CheckoutActionsProps> = ({ data }) => {
         <CheckoutModal
           open={modalOpen}
           onOpenChange={setModalOpen}
+          productSlug={data.slug}
         />
       )}
     </>
