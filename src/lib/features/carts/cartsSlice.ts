@@ -23,9 +23,16 @@ export type RemoveCartItem = {
 
 export type CartItem = {
   id: number;
+  /** Identificador único del pack en todo el catálogo (ver src/data/catalog.ts).
+   *  Es lo que el endpoint de pago usa para resolver QUÉ se está comprando.
+   *  Antes se resolvía por `attributes[0]` (el nombre del pack), que se repite
+   *  entre productos: comprar el pack de otro producto cobraba el precio del
+   *  primero del catálogo y descontaba su stock. */
+  sku: string;
   name: string;
   srcUrl: string;
   price: number;
+  /** Solo para mostrar. La identidad la da `sku`. */
   attributes: string[];
   discount: Discount;
   quantity: number;

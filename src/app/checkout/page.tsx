@@ -77,8 +77,10 @@ export default function CheckoutPage() {
         body: JSON.stringify({
           items: cart.items.map((item) => ({
             id: item.id,
+            // `sku` es lo que identifica el pack sin ambigüedad; `attributes`
+            // ya no se envía porque el nombre se repite entre productos.
+            sku: item.sku,
             quantity: item.quantity,
-            attributes: item.attributes,
           })),
           shippingAddress: checkout.shippingAddress,
           shippingMethodId: checkout.shippingMethod.id,

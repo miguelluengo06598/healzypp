@@ -1,9 +1,14 @@
 # Cómo añadir un producto nuevo a tu tienda
 
 Todo el catálogo (nombre, descripción, imágenes, precios y packs) vive en
-**un único archivo de código**: `src/data/catalog.ts`. Para añadir un
-producto nuevo no hace falta tocar Supabase, ni ningún componente — solo
-pedirle a Claude Code que edite ese archivo, con el prompt de más abajo.
+**un único archivo de código**: `src/data/catalog.ts`. Añadir un producto es
+editar ese archivo y, aparte, insertar una fila de stock en Supabase.
+
+> **Cambio importante (julio 2026).** Este manual decía antes que bastaba con
+> editar `catalog.ts` y que no había que tocar nada más. Eso era cierto cuando
+> la tienda tenía un solo producto. Ahora cada pack necesita además un **`sku`
+> único**, y hay reglas de unicidad que el proyecto comprueba solo. Ver
+> `docs/diseno-catalogo-multi-producto.md` para el porqué.
 
 ---
 
@@ -11,137 +16,170 @@ pedirle a Claude Code que edite ese archivo, con el prompt de más abajo.
 
 Ten preparado:
 
-1. **Las imágenes ya subidas** a la carpeta `public/images/` de tu
-   proyecto (arrástralas ahí antes de pedir el cambio). Anota los nombres
-   de archivo exactos (p.ej. `mi-producto-1.png`).
+1. **Las imágenes ya subidas** a `public/images/` (arrástralas ahí antes de
+   pedir el cambio). Anota los nombres exactos, p.ej. `mi-producto-1.png`.
 2. **Nombre, descripción larga, descripción corta, categoría.**
-3. **El precio de cada pack** que quieras vender (1 unidad, 2 unidades,
-   packs de varias unidades... lo que corresponda a tu producto).
-4. **El stock inicial** (cuántas unidades tienes disponibles hoy).
+3. **Los reclamos cortos** que quieras mostrar bajo el título ("100% veganas",
+   "Sin azúcares añadidos"…). Si no los das, se usan unos genéricos que **no**
+   mencionan ningún ingrediente.
+4. **El precio de cada pack** que quieras vender.
+5. **El stock inicial** (unidades disponibles hoy).
 
-⚠️ **Una regla importante que no puedes saltarte**: cada producto nuevo
-necesita un `id` numérico y un `slug` (texto) que **no existan ya** en
-`catalog.ts` — y los `id` de sus packs/bundles **tampoco pueden repetir**
-los `id` de packs de otros productos que ya tengas. Si tienes dudas, pide
-a Claude Code que revise `catalog.ts` primero y te confirme qué números
-están libres antes de añadir nada.
+### ⚠️ Las tres reglas de unicidad
+
+Cada producto nuevo necesita valores que **no existan ya** en `catalog.ts`:
+
+| Campo | Debe ser único entre | Por qué |
+|---|---|---|
+| `id` de producto | todos los productos | va en la URL `/shop/product/<id>/<slug>` |
+| `slug` de producto | todos los productos | es la clave de `product_stock` |
+| `sku` de cada pack | **todos los packs de todos los productos** | es lo que identifica qué se cobra |
+| `id` de cada pack | **todos los packs de todos los productos** | es el `content_id` que se envía a Meta |
+
+**El proyecto lo comprueba solo**: si repites cualquiera de esos valores, el
+`npm run build` falla con un mensaje del tipo
+`[catalog] sku de bundle repetido(s): …`. Es a propósito — antes, dos packs
+llamados igual hacían que comprar uno cobrase el precio del otro y descontase
+el stock del producto equivocado.
 
 ---
 
 ## El prompt listo para copiar
 
-Copia esto en Claude Code, rellena los corchetes `[...]` con tus datos
-reales, y bórralos (deja solo el texto, sin los corchetes):
-
 ```
 Quiero añadir un nuevo producto a mi catálogo. Antes de tocar nada, revisa
-src/data/catalog.ts y confírmame qué "id" de producto y qué "id" de bundle
-están libres (que no choquen con los productos que ya existen). Luego
-añade este producto a la constante CATALOG, siguiendo exactamente el
-mismo formato que el producto que ya existe ahí, sin tocar ningún otro
-archivo:
+src/data/catalog.ts y confírmame qué id de producto, qué slug y qué ids de
+pack están libres. Luego añade este producto a la constante CATALOG,
+siguiendo el mismo formato que los que ya existen:
 
-- Nombre: [nombre completo del producto]
+- Nombre: [nombre completo]
 - Slug: [texto-en-minusculas-con-guiones, sin espacios ni acentos]
-- Descripción larga: [2-3 frases describiendo el producto]
-- Descripción corta: [una frase, para la tarjeta de producto]
-- Categoría: [p.ej. "Suplementos", "Cosmética", etc.]
-- Meta title (SEO): [título para buscadores, máx. ~60 caracteres]
-- Meta description (SEO): [descripción para buscadores, máx. ~155 caracteres]
-- Imágenes (ya subidas a public/images/): [nombre-archivo-1.png, nombre-archivo-2.png, ...]
-- Packs/bundles que quiero vender:
-  - [Nombre del pack, p.ej. "1 unidad"] — cantidad: [número] — precio: [precio en euros, p.ej. 24.99] — ¿es el más popular?: [sí/no]
-  - [Nombre del pack 2] — cantidad: [número] — precio: [precio] — ¿es el más popular?: [sí/no]
-  - (añade tantos packs como quieras vender)
+- Descripción larga: [2-3 frases]
+- Descripción corta: [una frase, para la tarjeta]
+- Categoría: [p.ej. "Suplementos"]
+- Meta title (SEO): [máx. ~60 caracteres]
+- Meta description (SEO): [máx. ~155 caracteres]
+- Reclamos bajo el título: [p.ej. "Con jengibre natural", "100% veganas", ...]
+- Imágenes (ya en public/images/): [archivo-1.png, archivo-2.png, ...]
+- Packs que quiero vender:
+  - [Nombre, p.ej. "1 Bote"] — cantidad: [nº] — precio: [p.ej. 24.99] — ¿el más popular?: [sí/no]
+  - [Nombre pack 2] — cantidad: [nº] — precio: [precio] — ¿el más popular?: [sí/no]
+
+Cada pack necesita un `sku` único con el formato <slug-del-producto>-x<cantidad>.
 
 Después de editar catalog.ts:
-1. Añade también la fila de stock inicial en product_stock (tabla de
-   Supabase) para el slug de este producto nuevo, con [cantidad de
-   stock inicial] unidades — dame el SQL exacto para que lo ejecute yo
-   mismo en el SQL Editor de Supabase (no lo ejecutes tú directamente).
-2. Ejecuta npm run build y tsc --noEmit para confirmar que no rompe nada.
-3. Dime si el producto nuevo necesita alguna imagen o dato que no te di.
+1. Dame el SQL del INSERT en product_stock para este slug con [cantidad]
+   unidades, para ejecutarlo yo en Supabase.
+2. Ejecuta npm run build y npx tsc --noEmit para confirmar que no rompe nada
+   (el build falla solo si repites algún identificador).
+3. Levanta npm run dev y comprueba en el navegador que la ficha del producto
+   nuevo muestra SUS precios, no los de otro producto.
+4. Dime si falta alguna imagen o dato.
 ```
 
 ---
 
-## Formato exacto que espera `catalog.ts` (por si quieres revisarlo tú mismo)
+## Formato exacto que espera `catalog.ts`
 
-Cada producto es un objeto con estos campos — todos obligatorios salvo que
-se diga "opcional":
+Cada producto:
 
 | Campo | Qué es | Ejemplo |
 |---|---|---|
 | `id` | Número fijo, único entre productos | `2` |
-| `slug` | Texto estable, minúsculas y guiones, único | `"crema-facial-natural"` |
-| `nombre` | Nombre completo | `"Crema Facial Natural"` |
-| `descripcion` | Descripción larga | `"Crema hidratante..."` |
-| `descripcionCorta` | Una frase | `"Hidratación natural 24h."` |
-| `imagenes` | Lista de rutas, la primera es la principal | `["/images/crema-1.png"]` |
-| `categoria` | Texto libre | `"Cosmética"` |
-| `metaTitle` | Título SEO | `"Crema Facial Natural \| Marca"` |
-| `metaDescription` | Descripción SEO | `"Compra crema facial..."` |
-| `bundles` | Lista de packs (ver tabla siguiente) | — |
+| `slug` | Texto estable, único — clave de `product_stock` | `"gominolas-jengibre"` |
+| `nombre` | Nombre completo | `"Gominolas de Jengibre"` |
+| `descripcion` | Descripción larga | `"Gominolas naturales..."` |
+| `descripcionCorta` | Una frase | `"60 gominolas de jengibre natural."` |
+| `imagenes` | Lista de rutas, la primera es la principal | `["/images/jengibre-1.png"]` |
+| `categoria` | Texto libre | `"Suplementos"` |
+| `metaTitle` | Título SEO | `"Gominolas de Jengibre \| Natural"` |
+| `metaDescription` | Descripción SEO | `"Compra gominolas..."` |
+| `beneficios` | Opcional — reclamos bajo el título | `["Con jengibre natural", ...]` |
+| `bundles` | Lista de packs (ver abajo) | — |
 
-Cada **bundle/pack** dentro de `bundles`:
+Cada **pack** dentro de `bundles`:
 
 | Campo | Qué es | Ejemplo |
 |---|---|---|
-| `id` | Número fijo, único **entre TODOS los productos**, no solo dentro de este | `4` |
-| `cantidad` | Unidades reales que contiene (se descuenta del stock) | `1` |
-| `nombre` | Nombre del pack | `"1 unidad"` |
-| `precio` | Precio real en euros — esto es lo que se cobra | `24.99` |
-| `precioOriginal` | Opcional — precio tachado, para mostrar descuento | `29.99` |
-| `popular` | Opcional (`true`/`false`) — marca el pack destacado | `true` |
+| `sku` | **Único en TODO el catálogo.** Formato `<slug>-x<cantidad>` | `"gominolas-jengibre-x2"` |
+| `id` | Número fijo, **único en TODO el catálogo** — es el `content_id` de Meta | `5` |
+| `cantidad` | Unidades reales que contiene (se descuentan del stock) | `2` |
+| `nombre` | Nombre corto del pack | `"2 Botes"` |
+| `precio` | Precio real en euros — esto es lo que se cobra | `44.99` |
+| `precioOriginal` | Opcional — precio tachado | `49.98` |
+| `popular` | Opcional — marca el pack destacado | `true` |
+
+> El `sku` se escribe **a mano**, no se calcula. Acaba grabado en las filas de
+> `order_items` de pedidos ya hechos: si se derivara del slug o de la cantidad,
+> editar cualquiera de esos campos cambiaría en silencio el identificador de un
+> pack ya vendido.
+
+> En el carrito los packs se muestran como `"Producto — Pack"` (p.ej.
+> `"Gominolas de Jengibre — 2 Botes"`). Eso se genera solo: **no** escribas el
+> nombre del producto dentro de `nombre`.
 
 ---
 
-## Ejemplo completo (producto de muestra)
-
-Así quedaría un segundo producto añadido a `CATALOG` en `src/data/catalog.ts`
-(el `id` de producto es `2` porque el `1` ya lo usa "Gominolas de Vinagre
-de Manzana"; los `id` de bundle son `4`/`5`/`6` porque `1`/`2`/`3` ya los
-usan los bundles del primer producto):
+## Ejemplo completo
 
 ```ts
 {
   id: 2,
-  slug: "crema-facial-natural",
-  nombre: "Crema Facial Natural",
+  slug: "gominolas-jengibre",
+  nombre: "Gominolas de Jengibre",
   descripcion:
-    "Crema hidratante facial elaborada con ingredientes 100% naturales. Nutre e hidrata la piel durante 24 horas, apta para todo tipo de piel, incluida la sensible.",
-  descripcionCorta: "Hidratación natural 24h, apta para piel sensible.",
-  imagenes: ["/images/crema-1.png", "/images/crema-2.png"],
-  categoria: "Cosmética",
-  metaTitle: "Crema Facial Natural | Hidratación 24h",
+    "Gominolas naturales elaboradas con jengibre. Favorecen la digestión y aportan energía. 60 unidades por bote.",
+  descripcionCorta: "60 gominolas de jengibre natural, digestión y energía.",
+  imagenes: ["/images/jengibre-1.png", "/images/jengibre-2.png"],
+  categoria: "Suplementos",
+  metaTitle: "Gominolas de Jengibre | Natural y Vegano",
   metaDescription:
-    "Compra crema facial natural. Hidratación 24h para todo tipo de piel. Envío gratis.",
+    "Compra gominolas de jengibre natural. Favorecen la digestión. Envío gratis.",
+  beneficios: [
+    "Con jengibre natural",
+    "100% veganas",
+    "Sin azúcares añadidos",
+  ],
   bundles: [
-    { id: 4, cantidad: 1, nombre: "1 tarro", precio: 24.99, popular: false },
-    { id: 5, cantidad: 2, nombre: "Pack 2 tarros", precio: 44.99, precioOriginal: 49.98, popular: true },
-    { id: 6, cantidad: 3, nombre: "Pack 3 tarros", precio: 62.99, precioOriginal: 74.97, popular: false },
+    { sku: "gominolas-jengibre-x1", id: 4, cantidad: 1, nombre: "1 Bote",  precio: 24.99 },
+    { sku: "gominolas-jengibre-x2", id: 5, cantidad: 2, nombre: "2 Botes", precio: 44.99, precioOriginal: 49.98, popular: true },
+    { sku: "gominolas-jengibre-x3", id: 6, cantidad: 3, nombre: "3 Botes", precio: 59.99, precioOriginal: 74.97 },
   ],
 },
 ```
 
-Y la fila correspondiente en `product_stock` (ejecutar en el SQL Editor de
-Supabase — Claude Code te dará esta misma sentencia ya rellenada con tus
-datos si usas el prompt de arriba):
+Y la fila de stock (ejecutar en el SQL Editor de Supabase):
 
 ```sql
 INSERT INTO product_stock (product_slug, stock)
-VALUES ('crema-facial-natural', 200)
+VALUES ('gominolas-jengibre', 100)
 ON CONFLICT (product_slug) DO NOTHING;
 ```
+
+**Sin esa fila el producto no se puede comprar**: el stock disponible se lee
+como 0 y el checkout rechaza el pago con "No hay stock suficiente".
 
 ---
 
 ## Después del cambio
 
-- Revisa `/shop` y la ficha del producto nuevo en el navegador.
-- Confirma que el stock se insertó: en Supabase → Table Editor →
-  `product_stock` → busca tu slug nuevo.
+- Revisa `/shop` y la ficha del producto nuevo. Comprueba que muestra **sus**
+  precios y **sus** reclamos, no los de otro producto.
+- Confirma el stock en Supabase → Table Editor → `product_stock`.
 - Haz un pedido de prueba con la tarjeta de test de Stripe
-  (`4242 4242 4242 4242`) para confirmar que el precio mostrado y el
-  precio cobrado coinciden — deberían, siempre, porque ambos salen del
-  mismo `catalog.ts`.
+  (`4242 4242 4242 4242`, caducidad `12/34`, CVC `123`) y comprueba que:
+  - el importe cobrado es el del pack que elegiste,
+  - en `order_items` la fila tiene el `product_slug` correcto,
+  - baja el stock **de ese producto**, no el de otro.
+
+Si el producto nuevo tiene un stock alto y el otro bajo, ese último punto es la
+mejor forma de detectar una configuración mal hecha.
+
+---
+
+## Qué NO hace falta tocar
+
+`src/data/products.ts` y `src/lib/bundles.ts` son adaptadores sin datos
+propios: derivan todo de `catalog.ts` y recorren el catálogo entero, así que un
+producto nuevo aparece solo. **No edites precios ahí** — no tendría efecto en lo
+que se cobra y quedaría desincronizado con el resto de la tienda.

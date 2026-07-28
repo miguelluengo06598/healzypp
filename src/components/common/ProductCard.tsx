@@ -16,10 +16,11 @@ import { addToCart } from "@/lib/features/carts/cartsSlice";
 import { productPath } from "@/lib/site";
 import { useProductPreview } from "@/components/ProductPreviewContext";
 import {
-  BUNDLES,
+  getBundlesForProduct,
   calcSavings,
   calcUnitPrice,
   getBundlePriceEur,
+  getStrikePriceEur,
   formatPriceEur,
 } from "@/lib/bundles";
 
@@ -75,9 +76,16 @@ const ProductCard = ({ data, imagePriority = false }: ProductCardProps) => {
   const [isHovered, setIsHovered] = useState(false);
   const [isWishlisted, setIsWishlisted] = useState(false);
   const [previewIndex, setPreviewIndex] = useState(0);
-  const [selectedPackIdx, setSelectedPackIdx] = useState(1); // default: 2 packs (most popular)
+  // Packs DE ESTE producto — antes se leía la lista global, que solo contenía
+  // los del primer producto del catálogo: la tarjeta de cualquier otro
+  // producto mostraba precios ajenos y añadía al carrito el pack equivocado.
+  const bundles = useMemo(() => getBundlesForProduct(data.slug), [data.slug]);
+  const [selectedPackIdx, setSelectedPackIdx] = useState(() => {
+    const idx = bundles.findIndex((b) => b.popular);
+    return idx >= 0 ? idx : 0;
+  });
 
-  const selectedBundle = BUNDLES[selectedPackIdx];
+  const selectedBundle = bundles[selectedPackIdx] ?? bundles[0];
 
   /* --- computed gallery (main + up to 3 extras) --- */
   const images = useMemo(() => {
@@ -122,10 +130,11 @@ const ProductCard = ({ data, imagePriority = false }: ProductCardProps) => {
       dispatch(
         addToCart({
           id: data.id,
-          name: `${data.title} — ${selectedBundle.name}`,
+          sku: selectedBundle.sku,
+          name: selectedBundle.displayName,
           srcUrl: data.srcUrl,
           price: bundlePrice,
-          attributes: [selectedBundle.name],
+          attributes: [selectedBundle.displayName],
           discount: { amount: 0, percentage: 0 },
           quantity: 1,
         })
@@ -322,11 +331,11 @@ const ProductCard = ({ data, imagePriority = false }: ProductCardProps) => {
         {/* ---------- Pack Selector ---------- */}
         <div className="pt-1">
           <div className="flex items-center gap-1.5 bg-[#F0F0F0] rounded-full p-1">
-            {BUNDLES.map((bundle, idx) => {
+            {bundles.map((bundle, idx) => {
               const isActive = selectedPackIdx === idx;
               return (
                 <button
-                  key={bundle.id}
+                  key={bundle.sku}
                   type="button"
                   onClick={(e) => {
                     e.preventDefault();
@@ -341,7 +350,7 @@ const ProductCard = ({ data, imagePriority = false }: ProductCardProps) => {
                       : "bg-transparent text-black/60 hover:text-black hover:bg-black/5"
                   )}
                 >
-                  {bundle.id} PACK{bundle.id > 1 ? "S" : ""}
+                  {bundle.cantidad} PACK{bundle.cantidad > 1 ? "S" : ""}
                 </button>
               );
             })}
@@ -366,7 +375,7 @@ const ProductCard = ({ data, imagePriority = false }: ProductCardProps) => {
 
                 {savings > 0 && (
                   <span className="font-bold text-black/40 line-through text-base xl:text-lg">
-                    €{formatPriceEur(29.99 * selectedBundle.id)}
+                    €{formatPriceEur(getStrikePriceEur(selectedBundle))}
                   </span>
                 )}
 

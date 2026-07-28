@@ -21,7 +21,7 @@ const CreateOrderSchema = z.object({
     city:       z.string().min(2).max(100).trim(),
     province:   z.string().min(2).max(100).trim(),
   }),
-  bundleId:               z.number().int().min(1).max(3),
+  sku:                    z.string().min(1).max(120),
   bundlePriceInCents:     z.number().int().min(0).optional(),
   paymentMethod:          z.literal('CARD'),
   stripePaymentIntentId:  z.string().startsWith('pi_').optional(),

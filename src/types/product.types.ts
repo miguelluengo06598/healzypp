@@ -10,6 +10,10 @@ export type ProductColor = {
 
 export type Product = {
   id: number;
+  /** Identificador estable del producto en el catálogo (src/data/catalog.ts).
+   *  Es lo que necesitan los helpers de bundles para resolver los packs de
+   *  ESTE producto y no los del primero del catálogo. */
+  slug: string;
   title: string;
   srcUrl: string;
   gallery?: string[];

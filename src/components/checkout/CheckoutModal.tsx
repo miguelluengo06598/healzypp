@@ -121,6 +121,10 @@ const MAPBOX_THEME_CSS = `
 export interface CheckoutModalProps {
   open: boolean;
   onOpenChange: (v: boolean) => void;
+  /** Producto cuya ficha abrió el modal. Es obligatorio porque el pack a
+   *  cobrar se resuelve contra ESTE producto: sin él se leía una selección
+   *  global y se podía cobrar el pack de otro producto. */
+  productSlug: string;
 }
 
 interface ShippingData {
@@ -171,7 +175,10 @@ function OrderSummaryPanel({ bundle }: { bundle: Bundle }) {
       <div className={cn("px-4 pb-4 pt-3 space-y-2.5", expanded ? "block" : "hidden md:block")}>
         <div className="space-y-1.5 text-sm">
           <div className="flex justify-between text-black/70">
-            <span>Gominolas de vinagre de manzana</span>
+            {/* Nombre del pack que se está comprando de verdad. Antes estaba
+                escrito a mano ("Gominolas de vinagre de manzana"), así que el
+                resumen anunciaba otro producto al comprar el segundo. */}
+            <span>{bundle.displayName}</span>
             <span className="font-medium">{bundle.price}</span>
           </div>
           <div className="flex justify-between text-black/70">
@@ -366,7 +373,7 @@ function CardForm({
           province:   data.province,
           email:      data.email,
         },
-        bundleId:              bundle.id,
+        sku:                   bundle.sku,
         paymentMethod:         "CARD",
         stripePaymentIntentId: paymentIntentId,
       });
@@ -656,50 +663,71 @@ function CardForm({
 /*  MAIN MODAL                                                                  */
 /* ═══════════════════════════════════════════════════════════════════════════ */
 
-const CheckoutModal: React.FC<CheckoutModalProps> = ({ open, onOpenChange }) => {
+const CheckoutModal: React.FC<CheckoutModalProps> = ({ open, onOpenChange, productSlug }) => {
   const [bundle,              setBundle]              = useState<Bundle | null>(null);
   const [clientSecret,        setClientSecret]        = useState<string | null>(null);
   const [paymentIntentId,     setPaymentIntentId]     = useState<string | null>(null);
   const [clientSecretLoading, setClientSecretLoading] = useState(false);
   const [error,               setError]               = useState<string | null>(null);
-  const clientSecretCache = useRef<Record<number, { clientSecret: string; paymentIntentId: string }>>({});
+  // Cachea la PROMESA en vuelo, no el resultado. La entrada se escribe de forma
+  // SÍNCRONA antes de lanzar el fetch: antes solo se poblaba al resolver, así que
+  // la doble invocación del efecto (React StrictMode en desarrollo, o cualquier
+  // reapertura rápida) encontraba la caché vacía las dos veces y creaba DOS
+  // PaymentIntents. El pedido guardaba uno y se cobraba el otro, de modo que el
+  // webhook no encontraba pedido para el PI cobrado: ni descontaba stock, ni
+  // enviaba Pushover, ni el Purchase a CAPI.
+  const clientSecretCache = useRef<
+    Record<string, Promise<{ clientSecret: string; paymentIntentId: string }>>
+  >({});
 
   useEffect(() => {
     if (!open) return;
-    const b = getStoredBundle();
+    const b = getStoredBundle(productSlug);
     setBundle(b);
     setError(null);
+    if (!b) return;
 
-    if (b) {
-      const cached = clientSecretCache.current[b.id];
-      if (cached) {
-        setClientSecret(cached.clientSecret);
-        setPaymentIntentId(cached.paymentIntentId);
-        return;
-      }
-      setClientSecretLoading(true);
-      fetch("/api/create-payment-intent", {
+    let cancelado = false;
+
+    let pendiente = clientSecretCache.current[b.sku];
+    if (!pendiente) {
+      pendiente = fetch("/api/create-payment-intent", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ bundleId: b.id }),
-      })
-        .then(async res => {
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.error || "Error del servidor");
-          clientSecretCache.current[b.id] = {
-            clientSecret: data.clientSecret,
-            paymentIntentId: data.paymentIntentId,
-          };
-          setClientSecret(data.clientSecret);
-          setPaymentIntentId(data.paymentIntentId);
-        })
-        .catch(err => {
-          console.error("[CheckoutModal] Error cargando clientSecret:", err);
-          setError("Hubo un problema al iniciar el pago. Inténtalo de nuevo.");
-        })
-        .finally(() => setClientSecretLoading(false));
+        body:    JSON.stringify({ sku: b.sku }),
+      }).then(async res => {
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Error del servidor");
+        return {
+          clientSecret:    data.clientSecret as string,
+          paymentIntentId: data.paymentIntentId as string,
+        };
+      });
+      // Síncrono, antes de ceder el control: la segunda invocación ya la ve.
+      clientSecretCache.current[b.sku] = pendiente;
     }
-  }, [open]);
+
+    setClientSecretLoading(true);
+    pendiente
+      .then(({ clientSecret, paymentIntentId }) => {
+        if (cancelado) return;
+        setClientSecret(clientSecret);
+        setPaymentIntentId(paymentIntentId);
+      })
+      .catch(err => {
+        // Retirar la promesa fallida para poder reintentar al reabrir el modal;
+        // si se quedara cacheada, el error sería permanente en esta sesión.
+        delete clientSecretCache.current[b.sku];
+        if (cancelado) return;
+        console.error("[CheckoutModal] Error cargando clientSecret:", err);
+        setError("Hubo un problema al iniciar el pago. Inténtalo de nuevo.");
+      })
+      .finally(() => {
+        if (!cancelado) setClientSecretLoading(false);
+      });
+
+    return () => { cancelado = true; };
+  }, [open, productSlug]);
 
   const handleError = useCallback((msg: string) => setError(msg || null), []);
 

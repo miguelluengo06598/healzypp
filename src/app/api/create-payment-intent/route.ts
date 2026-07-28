@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { z } from "zod";
-import { findBundleByIdAcrossCatalog } from "@/data/catalog";
+import { findBundleBySku } from "@/data/catalog";
 import { paymentIntentRatelimit, getClientIp } from "@/lib/rate-limit";
 import { isTrustedOrigin } from "@/lib/security/origin-check";
 import { createServiceClient } from "@/lib/supabase";
@@ -10,9 +10,11 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2026-04-22.dahlia",
 });
 
-// Esquema de validación — bundleId debe ser entero 1-3
+// Se identifica el pack por su `sku`, único en todo el catálogo. Antes era un
+// `bundleId` numérico acotado a 1-3, que dejaba fuera cualquier pack de un
+// producto añadido después (los del segundo producto tienen ids 4/5/6).
 const BodySchema = z.object({
-  bundleId: z.number().int().min(1).max(3),
+  sku: z.string().min(1).max(120),
 });
 
 export async function POST(req: NextRequest) {
@@ -64,7 +66,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const { bundleId } = parsed.data;
+  const { sku } = parsed.data;
 
   try {
     // ── Resolver bundle/producto — 100% desde el catálogo en código
@@ -72,7 +74,7 @@ export async function POST(req: NextRequest) {
     //    valor para mostrar (UI) y para cobrar (aquí). Nunca hay dos precios
     //    que puedan divergir, a diferencia del diseño anterior (mock +
     //    verificación en Supabase con comprobación de igualdad).
-    const resolved = findBundleByIdAcrossCatalog(bundleId);
+    const resolved = findBundleBySku(sku);
     if (!resolved) {
       return NextResponse.json({ error: "Bundle no válido." }, { status: 400 });
     }
@@ -115,7 +117,14 @@ export async function POST(req: NextRequest) {
       amount: realPriceCents,
       currency: "eur",
       capture_method: "automatic",
-      metadata: { bundleId: String(bundleId), bundleName: bundle.nombre, productSlug: product.slug },
+      metadata: {
+        sku: bundle.sku,
+        productSlug: product.slug,
+        bundleName: bundle.nombre,
+        // Numérico a propósito: es el content_id que el webhook envía a Meta.
+        // Cambiarlo rompería la correspondencia con el catálogo de Meta.
+        bundleId: String(bundle.id),
+      },
     });
 
     return NextResponse.json(
