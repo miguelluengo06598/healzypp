@@ -10,27 +10,14 @@ import NewsLetterSection from "./NewsLetterSection";
 import LayoutSpacing from "./LayoutSpacing";
 import { SITE_NAME } from "@/lib/site";
 
-const socialsData: (SocialNetworks & { name: string })[] = [
-  {
-    id: 1,
-    icon: <FaTwitter />,
-    url: "https://twitter.com",
-    name: "X",
-  },
-  {
-    id: 2,
-    icon: <FaFacebookF />,
-    url: "https://facebook.com",
-    name: "Facebook",
-  },
-  {
-    id: 3,
-    icon: <FaInstagram />,
-    url: "https://instagram.com",
-    name: "Instagram",
-  },
-
-];
+// Vacío a propósito. Los tres iconos que había (X, Facebook, Instagram)
+// apuntaban a twitter.com, facebook.com e instagram.com: los dominios
+// genéricos, no a ningún perfil de la tienda. Quien los pulsaba acababa en la
+// portada de la red social.
+//
+// Para reactivarlos basta con añadir aquí las URL reales de los perfiles; el
+// bloque de abajo ya no renderiza nada si la lista está vacía.
+const socialsData: (SocialNetworks & { name: string })[] = [];
 
 const paymentBadgesData: (PaymentBadge & { name: string })[] = [
   {
@@ -98,10 +85,12 @@ const Footer = () => {
                 ))}
               </div>
             </div>
-            <div className="hidden lg:grid col-span-9 lg:grid-cols-4 lg:pl-10">
+            {/* 2 columnas, no 4: quedaron dos secciones tras retirar los
+                enlaces que no llevaban a ninguna parte. */}
+            <div className="hidden lg:grid col-span-9 lg:grid-cols-2 lg:pl-10">
               <LinksSection />
             </div>
-            <div className="grid lg:hidden grid-cols-2 sm:grid-cols-4">
+            <div className="grid lg:hidden grid-cols-2">
               <LinksSection />
             </div>
           </nav>
@@ -109,7 +98,7 @@ const Footer = () => {
           <hr className="h-[1px] border-t-black/10 mb-6" />
           <div className="flex flex-col sm:flex-row justify-center sm:justify-between items-center mb-2">
             <p className="text-sm text-center sm:text-left text-black/60 mb-4 sm:mb-0 sm:mr-1">
-              Nombre Tienda{" "}&copy; {new Date().getFullYear()}. Todos los derechos reservados.
+              {SITE_NAME}{" "}&copy; {new Date().getFullYear()}. Todos los derechos reservados.
             </p>
             <div className="flex items-center">
               {paymentBadgesData.map((badge, _, arr) => (

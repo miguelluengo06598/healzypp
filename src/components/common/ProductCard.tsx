@@ -15,6 +15,7 @@ import { useAppDispatch } from "@/lib/hooks/redux";
 import { addToCart } from "@/lib/features/carts/cartsSlice";
 import { productPath } from "@/lib/site";
 import { useProductPreview } from "@/components/ProductPreviewContext";
+import { useMetaPixel } from "@/hooks/useMetaPixel";
 import {
   getBundlesForProduct,
   calcSavings,
@@ -71,6 +72,7 @@ const SPRING_BOUNCE = {
 const ProductCard = ({ data, imagePriority = false }: ProductCardProps) => {
   const dispatch = useAppDispatch();
   const { openPreview } = useProductPreview();
+  const { trackAddToCart } = useMetaPixel();
 
   /* --- local state --- */
   const [isHovered, setIsHovered] = useState(false);
@@ -139,8 +141,20 @@ const ProductCard = ({ data, imagePriority = false }: ProductCardProps) => {
           quantity: 1,
         })
       );
+
+      // AddToCart de Meta en el momento real de añadir. Antes solo se emitía
+      // al abrir el modal de pago desde la ficha, así que la vía principal
+      // (este botón, en /shop y en la home) no generaba ninguna señal.
+      // content_id = bundle.id, el mismo identificador numérico que el
+      // webhook envía en Purchase — así ambos eventos hablan del mismo pack.
+      trackAddToCart({
+        id: selectedBundle.id,
+        slug: data.slug,
+        name: selectedBundle.displayName,
+        price: bundlePrice,
+      });
     },
-    [dispatch, data, selectedBundle, bundlePrice]
+    [dispatch, data, selectedBundle, bundlePrice, trackAddToCart]
   );
 
   /* --- wishlist toggle --- */

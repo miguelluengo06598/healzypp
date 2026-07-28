@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useEffect, useState } from "react"
+import React, { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Elements } from "@stripe/react-stripe-js"
@@ -13,6 +13,8 @@ import { integralCF } from "@/styles/fonts"
 import { cn } from "@/lib/utils"
 import { FaLock } from "react-icons/fa"
 import { useCheckout } from "@/hooks/useCheckout"
+import { useMetaPixel } from "@/hooks/useMetaPixel"
+import { getBundleIdBySku } from "@/data/catalog"
 import { SITE_NAME } from "@/lib/site"
 
 import ContactSection from "@/components/checkout/ContactSection"
@@ -29,6 +31,8 @@ export default function CheckoutPage() {
 
   const [paymentLoading, setPaymentLoading] = useState(false)
   const [paymentError, setPaymentError] = useState<string | null>(null)
+  const { trackInitiateCheckout } = useMetaPixel()
+  const initiateCheckoutEnviado = useRef(false)
 
   // Redirect to shop if cart is empty
   useEffect(() => {
@@ -36,6 +40,29 @@ export default function CheckoutPage() {
       router.replace("/shop")
     }
   }, [cart, checkout.hydrated, router])
+
+  // InitiateCheckout del flujo de CARRITO. Este checkout no emitía ninguna
+  // señal a Meta: solo la emitía el modal de compra directa desde la ficha.
+  // Se dispara una vez por visita a la página (el ref evita repetirlo en cada
+  // re-render conforme el usuario avanza por los pasos) y solo con el carrito
+  // ya hidratado, para no mandar un total de 0.
+  useEffect(() => {
+    if (initiateCheckoutEnviado.current) return
+    if (!checkout.hydrated || !cart || cart.items.length === 0) return
+    initiateCheckoutEnviado.current = true
+
+    trackInitiateCheckout({
+      value: adjustedTotalPrice,
+      currency: "EUR",
+      items: cart.items.map((item) => ({
+        // content_id numérico, igual que en AddToCart y en el Purchase.
+        id: getBundleIdBySku(item.sku) ?? item.id,
+        name: item.name,
+        quantity: item.quantity,
+        price: item.price,
+      })),
+    })
+  }, [checkout.hydrated, cart, adjustedTotalPrice, trackInitiateCheckout])
 
   if (!checkout.hydrated || !cart || cart.items.length === 0) {
     return null

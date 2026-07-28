@@ -25,7 +25,7 @@ Ten preparado:
 4. **El precio de cada pack** que quieras vender.
 5. **El stock inicial** (unidades disponibles hoy).
 
-### ⚠️ Las tres reglas de unicidad
+### ⚠️ Las cuatro reglas de unicidad
 
 Cada producto nuevo necesita valores que **no existan ya** en `catalog.ts`:
 
@@ -147,6 +147,11 @@ Cada **pack** dentro de `bundles`:
   ],
 },
 ```
+
+> El ejemplo usa el id de producto `2` y los ids de pack `4`/`5`/`6` porque son
+> los primeros libres con el catálogo actual (un solo producto, que ocupa el id
+> `1` y los packs `1`/`2`/`3`). Comprueba cuáles están libres en tu momento
+> antes de copiarlo tal cual.
 
 Y la fila de stock (ejecutar en el SQL Editor de Supabase):
 
