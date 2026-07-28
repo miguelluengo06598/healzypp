@@ -75,7 +75,11 @@ export function renderEnvioEmail(params: EnvioEmailParams): {
     .map((i) => `<li>${escapeHtml(i.nombre)} × ${i.cantidad}</li>`)
     .join('')
 
-  const urlPedidos = `${SITE_URL}/account/orders`
+  // /seguimiento y no /account/orders: el checkout permite comprar como
+  // invitado, así que enlazar a la zona de cuenta mandaba a media clientela a
+  // un modal de login. Con ?pedido=... el cliente solo tiene que poner su
+  // email para identificarse.
+  const urlPedidos = `${SITE_URL}/seguimiento?pedido=${encodeURIComponent(params.numeroPedido)}`
 
   const html = `<!doctype html>
 <html lang="es">

@@ -92,6 +92,82 @@ function makeRatelimit(requests: number, window: string) {
   } as unknown as Ratelimit;
 }
 
+// ─── Limiter estricto: Redis con respaldo EN MEMORIA ─────────────────────────
+//
+// makeRatelimit() de arriba falla ABIERTO a propósito: para el checkout, la
+// disponibilidad manda sobre el límite. Para un endpoint de CONSULTA que es
+// blanco natural de fuerza bruta (probar números de pedido y emails ajenos),
+// esa decisión se invierte: si Redis cae, dejarlo pasar todo convierte el
+// endpoint en un oráculo sin límite.
+//
+// Tampoco vale fallar cerrado del todo (un outage de Upstash dejaría a los
+// clientes sin poder consultar su pedido). El punto medio es un contador en
+// memoria del proceso: no es distribuido —en serverless cada instancia lleva
+// el suyo— pero corta en seco a un atacante que machaca desde una IP, que es
+// justo el caso que importa.
+
+interface MemoryBucket {
+  count: number
+  resetAt: number
+}
+const memoryBuckets = new Map<string, MemoryBucket>()
+
+function memoryLimit(id: string, requests: number, windowMs: number) {
+  const now = Date.now()
+
+  // Limpieza perezosa: evita que el Map crezca sin límite con IPs que ya
+  // caducaron. Barato porque solo corre cuando se usa el respaldo.
+  if (memoryBuckets.size > 5000) {
+    for (const [k, v] of memoryBuckets) {
+      if (v.resetAt <= now) memoryBuckets.delete(k)
+    }
+  }
+
+  const bucket = memoryBuckets.get(id)
+  if (!bucket || bucket.resetAt <= now) {
+    memoryBuckets.set(id, { count: 1, resetAt: now + windowMs })
+    return { success: true, limit: requests, remaining: requests - 1, reset: now + windowMs }
+  }
+
+  bucket.count += 1
+  const remaining = Math.max(0, requests - bucket.count)
+  return {
+    success: bucket.count <= requests,
+    limit: requests,
+    remaining,
+    reset: bucket.resetAt,
+  }
+}
+
+function makeStrictRatelimit(requests: number, window: string, windowMs: number) {
+  const rl = redis
+    ? new Ratelimit({
+        redis,
+        limiter: Ratelimit.fixedWindow(
+          requests,
+          window as Parameters<typeof Ratelimit.fixedWindow>[1]
+        ),
+        analytics: false,
+      })
+    : null
+
+  return {
+    limit: async (id: string) => {
+      if (rl) {
+        try {
+          return await rl.limit(id)
+        } catch (err) {
+          console.error(
+            "[ratelimit:strict] Redis error — usando contador en memoria:",
+            err instanceof Error ? err.message : String(err)
+          )
+        }
+      }
+      return memoryLimit(id, requests, windowMs)
+    },
+  }
+}
+
 // ─── Instancias pre-configuradas ─────────────────────────────────────────────
 
 /** POST /api/create-payment-intent y /api/checkout/create-payment-intent */
@@ -131,6 +207,16 @@ export const dashboardApiRatelimit = makeRatelimit(60, "1 m");
  * pedido con un token válido.
  */
 export const orderDetailRatelimit = makeRatelimit(30, "1 m");
+
+/**
+ * POST /api/seguimiento — consulta pública de un pedido por número + email.
+ *
+ * Estricto (5/hora por IP) y con respaldo en memoria si Redis cae: es el único
+ * endpoint sin autenticar que devuelve datos de un pedido concreto, así que un
+ * atacante podría intentar adivinar combinaciones de número y email. Un
+ * cliente legítimo consulta su pedido un par de veces; 5 por hora le sobra.
+ */
+export const seguimientoRatelimit = makeStrictRatelimit(5, "1 h", 60 * 60 * 1000);
 
 // ─── Helpers de extracción de IP ─────────────────────────────────────────────
 
