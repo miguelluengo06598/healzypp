@@ -3,6 +3,12 @@
 --
 -- Idempotente: se puede ejecutar varias veces sin efecto adicional.
 -- NO toca order_status_enum a propósito (ver más abajo).
+--
+-- ATAJO, NO FUENTE DE VERDAD. Todo lo de aquí está también en
+-- database/SETUP-COMPLETO.sql (columnas en su CREATE TABLE, más la sección
+-- 4.13 de reconciliación y el índice en la sección 5). Este archivo existe
+-- solo para aplicar el cambio a una base YA en producción sin volver a lanzar
+-- el script completo. Una instalación nueva NO lo necesita.
 -- ════════════════════════════════════════════════════════════════════════════
 
 -- ── 1. "Se entrega hoy" ─────────────────────────────────────────────────────

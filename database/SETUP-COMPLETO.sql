@@ -17,6 +17,17 @@
 -- 6. Puedes volver a ejecutar este archivo entero las veces que quieras —
 --    es idempotente: no falla ni duplica nada si ya existe.
 --
+-- ES EL ÚNICO ARCHIVO QUE HACE FALTA
+-- Para levantar la tienda de cero no hay que ejecutar nada más. Re-ejecutarlo
+-- sobre una base YA montada también la pone al día: la sección 4.13 reconcilia
+-- con ADD COLUMN IF NOT EXISTS las columnas añadidas después de la creación
+-- inicial, que un CREATE TABLE IF NOT EXISTS por sí solo nunca añadiría.
+--
+-- database/migrations/ contiene el mismo cambio aislado, solo por comodidad:
+-- si ya tienes la base en producción y prefieres aplicar tres ALTER en vez de
+-- volver a lanzar las 1300 líneas de este archivo. No aporta nada que no esté
+-- aquí; una instalación nueva puede ignorar esa carpeta por completo.
+--
 -- ORDEN (por dependencias, de arriba a abajo):
 --   1. Extensiones
 --   2. Enums
@@ -450,10 +461,12 @@ CREATE TABLE IF NOT EXISTS orders (
   cupon_id                UUID REFERENCES coupons(id) ON DELETE SET NULL,
   direccion_envio         JSONB DEFAULT '{}',
   notas_cliente           TEXT,
+  incidencia              TEXT,
   fecha_creacion          TIMESTAMPTZ DEFAULT NOW(),
   fecha_actualizacion     TIMESTAMPTZ DEFAULT NOW()
 );
 COMMENT ON TABLE orders IS 'Pedidos realizados en la tienda';
+COMMENT ON COLUMN orders.incidencia IS 'Descripción de una incidencia logística. Ortogonal al estado: un pedido puede estar "enviado" y tener incidencia. NULL = sin incidencia. No confundir con estado=fallido, que es un pago fallido.';
 
 -- 4.8 order_items (incluye unidades_stock desde el origen — ver nota de
 -- consolidación al principio del archivo)
@@ -483,9 +496,11 @@ CREATE TABLE IF NOT EXISTS order_tracking (
   descripcion     TEXT,
   numero_tracking VARCHAR(100),
   empresa_envio   VARCHAR(100),
+  fecha_estimada_entrega DATE,
   fecha_creacion  TIMESTAMPTZ DEFAULT NOW()
 );
 COMMENT ON TABLE order_tracking IS 'Historial de estados de un pedido';
+COMMENT ON COLUMN order_tracking.fecha_estimada_entrega IS 'Fecha estimada de entrega. Si coincide con hoy, la UI muestra "Se entrega hoy" en vez de "Enviado". NULL = sin estimación. No hay valor propio en order_status_enum para "se entrega hoy" a propósito: es el mismo estado enviado con una fecha.';
 
 -- 4.10 cart_items
 -- La unicidad (user_id, product_id, variant_id) no puede ser un UNIQUE de
@@ -540,6 +555,41 @@ COMMENT ON TABLE contact_messages IS 'Mensajes del formulario de contacto (src/a
 
 
 -- ════════════════════════════════════════════════════════════════════════════
+-- 4.13 RECONCILIACIÓN DE COLUMNAS AÑADIDAS DESPUÉS
+--
+-- ⚠️ Lee esto antes de añadir una columna nueva a cualquier tabla de arriba.
+--
+-- CREATE TABLE IF NOT EXISTS solo crea la tabla si NO existe. En una base que
+-- ya está montada, añadir una columna al CREATE TABLE de arriba NO la crea:
+-- el bloque entero se salta. Instalación nueva y base existente acaban con
+-- esquemas distintos, en silencio.
+--
+-- No es hipotético. Pasó en producción con order_items.product_slug: estaba
+-- declarado arriba, la tienda lo escribía, y la columna no existía en la base
+-- real. Resultado: pedidos cobrados cuyo stock nunca se descontaba, y sin
+-- ninguna alerta, porque el guard que avisaba de sobreventa solo salta cuando
+-- el decremento falla, no cuando no hay nada que decrementar.
+--
+-- Por eso TODA columna añadida después de la creación inicial se declara en
+-- DOS sitios: en su CREATE TABLE (para instalaciones nuevas) y aquí con
+-- ADD COLUMN IF NOT EXISTS (para las que ya existen). Duplicado a propósito.
+-- ════════════════════════════════════════════════════════════════════════════
+
+-- Identificador real del producto en cada línea de pedido (src/data/catalog.ts).
+-- El webhook de Stripe agrupa por esta columna para decrementar product_stock.
+ALTER TABLE order_items ADD COLUMN IF NOT EXISTS product_slug TEXT;
+
+-- Unidades reales de stock que consume la línea (bundle.cantidad × cantidad).
+ALTER TABLE order_items ADD COLUMN IF NOT EXISTS unidades_stock INTEGER;
+
+-- "Se entrega hoy" = estado 'enviado' con esta fecha puesta a hoy.
+ALTER TABLE order_tracking ADD COLUMN IF NOT EXISTS fecha_estimada_entrega DATE;
+
+-- Incidencia logística, ortogonal al estado del pedido.
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS incidencia TEXT;
+
+
+-- ════════════════════════════════════════════════════════════════════════════
 -- 5. ÍNDICES NÚCLEO
 -- ════════════════════════════════════════════════════════════════════════════
 
@@ -570,6 +620,11 @@ CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items(order_id);
 CREATE INDEX IF NOT EXISTS idx_order_items_product_id ON order_items(product_id);
 
 CREATE INDEX IF NOT EXISTS idx_tracking_order_id ON order_tracking(order_id);
+-- El historial se lee siempre por pedido y ordenado por fecha (detalle de
+-- pedido, /seguimiento y el timeline de /account/orders): el índice compuesto
+-- evita ordenar en memoria según crece la tabla.
+CREATE INDEX IF NOT EXISTS idx_order_tracking_order_fecha
+  ON order_tracking (order_id, fecha_creacion DESC);
 
 CREATE INDEX IF NOT EXISTS idx_cart_items_user_id ON cart_items(user_id);
 
