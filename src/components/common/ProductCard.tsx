@@ -130,10 +130,11 @@ const ProductCard = ({ data, imagePriority = false }: ProductCardProps) => {
       dispatch(
         addToCart({
           id: data.id,
-          name: `${data.title} — ${selectedBundle.name}`,
+          sku: selectedBundle.sku,
+          name: selectedBundle.displayName,
           srcUrl: data.srcUrl,
           price: bundlePrice,
-          attributes: [selectedBundle.name],
+          attributes: [selectedBundle.displayName],
           discount: { amount: 0, percentage: 0 },
           quantity: 1,
         })

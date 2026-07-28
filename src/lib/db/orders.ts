@@ -5,7 +5,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { createServiceClient } from '@/lib/supabase'
-import { findBundleByIdAcrossCatalog } from '@/data/catalog'
+import { findBundleBySku } from '@/data/catalog'
 import type {
   OrderRow,
   OrderItemRow,
@@ -24,7 +24,11 @@ export interface CreateOrderInput {
     city: string
     province: string
   }
-  bundleId: number
+  /** Identificador único del pack en el catálogo (ver src/data/catalog.ts).
+   *  Antes era un `bundleId` numérico que se resolvía con la primera
+   *  coincidencia del catálogo, así que con más de un producto podía apuntar
+   *  al pack equivocado. */
+  sku: string
   bundlePriceInCents?: number
   paymentMethod: PaymentMethod
   stripePaymentIntentId?: string
@@ -60,11 +64,11 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
   // versión anterior (que consultaba bundles/products en Supabase y podía
   // no encontrar la fila, de ahí el fallback a BUNDLES/precio del
   // cliente), esta búsqueda es en memoria y no puede fallar por red — solo
-  // falla si el bundleId no existe en el catálogo, lo cual es un dato
-  // inválido real, no un problema de disponibilidad.
-  const resolved = findBundleByIdAcrossCatalog(input.bundleId)
+  // falla si el sku no existe en el catálogo, lo cual es un dato inválido
+  // real, no un problema de disponibilidad.
+  const resolved = findBundleBySku(input.sku)
   if (!resolved) {
-    return { success: false, error: `El bundle solicitado (${input.bundleId}) no existe en el catálogo.` }
+    return { success: false, error: `El bundle solicitado (${input.sku}) no existe en el catálogo.` }
   }
   const { product, bundle } = resolved
   const unitPriceEur = bundle.precio

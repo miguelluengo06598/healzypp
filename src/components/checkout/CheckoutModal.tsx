@@ -370,7 +370,7 @@ function CardForm({
           province:   data.province,
           email:      data.email,
         },
-        bundleId:              bundle.id,
+        sku:                   bundle.sku,
         paymentMethod:         "CARD",
         stripePaymentIntentId: paymentIntentId,
       });
@@ -674,7 +674,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ open, onOpenChange, produ
   // webhook no encontraba pedido para el PI cobrado: ni descontaba stock, ni
   // enviaba Pushover, ni el Purchase a CAPI.
   const clientSecretCache = useRef<
-    Record<number, Promise<{ clientSecret: string; paymentIntentId: string }>>
+    Record<string, Promise<{ clientSecret: string; paymentIntentId: string }>>
   >({});
 
   useEffect(() => {
@@ -686,12 +686,12 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ open, onOpenChange, produ
 
     let cancelado = false;
 
-    let pendiente = clientSecretCache.current[b.id];
+    let pendiente = clientSecretCache.current[b.sku];
     if (!pendiente) {
       pendiente = fetch("/api/create-payment-intent", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ bundleId: b.id }),
+        body:    JSON.stringify({ sku: b.sku }),
       }).then(async res => {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Error del servidor");
@@ -701,7 +701,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ open, onOpenChange, produ
         };
       });
       // Síncrono, antes de ceder el control: la segunda invocación ya la ve.
-      clientSecretCache.current[b.id] = pendiente;
+      clientSecretCache.current[b.sku] = pendiente;
     }
 
     setClientSecretLoading(true);
@@ -714,7 +714,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ open, onOpenChange, produ
       .catch(err => {
         // Retirar la promesa fallida para poder reintentar al reabrir el modal;
         // si se quedara cacheada, el error sería permanente en esta sesión.
-        delete clientSecretCache.current[b.id];
+        delete clientSecretCache.current[b.sku];
         if (cancelado) return;
         console.error("[CheckoutModal] Error cargando clientSecret:", err);
         setError("Hubo un problema al iniciar el pago. Inténtalo de nuevo.");

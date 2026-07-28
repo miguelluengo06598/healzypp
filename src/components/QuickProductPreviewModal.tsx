@@ -256,10 +256,11 @@ const QuickProductPreviewModal: React.FC = () => {
     dispatch(
       addToCart({
         id: selectedProduct.id,
-        name: `${selectedProduct.title} — ${selectedBundle.name}`,
+        sku: selectedBundle.sku,
+        name: selectedBundle.displayName,
         srcUrl: selectedProduct.srcUrl,
         price: bundlePrice,
-        attributes: [selectedBundle.name],
+        attributes: [selectedBundle.displayName],
         discount: { amount: 0, percentage: 0 },
         quantity: 1,
       })

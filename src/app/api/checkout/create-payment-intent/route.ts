@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import Stripe from "stripe"
 import { z } from "zod"
-import { findBundleByNameAcrossCatalog } from "@/data/catalog"
+import { findBundleBySku } from "@/data/catalog"
 import { SHIPPING_OPTIONS, FREE_SHIPPING_THRESHOLD_EUR } from "@/lib/shipping"
 import { createCheckoutOrder, attachPaymentIntent } from "@/lib/db/checkout-orders"
 import { paymentIntentRatelimit, getClientIp } from "@/lib/rate-limit"
@@ -35,8 +35,9 @@ const BodySchema = z.object({
     .array(
       z.object({
         id: z.number().int().positive(),
+        /** Identificador único del pack — ver src/data/catalog.ts */
+        sku: z.string().min(1).max(120),
         quantity: z.number().int().min(1).max(100),
-        attributes: z.array(z.string()).default([]),
       })
     )
     .min(1)
@@ -54,14 +55,15 @@ const BodySchema = z.object({
  * cobrar). El único dato que sigue en Supabase es el STOCK real
  * (product_stock, por slug), porque es estado mutable, no contenido.
  *
- * El único dato fiable del item del carrito para identificar QUÉ se está
- * comprando es el nombre del bundle en `attributes[0]` (p.ej. "2 Botes"),
- * que se busca en TODO el catálogo (no un producto fijo) vía
- * findBundleByNameAcrossCatalog.
+ * Se identifica QUÉ se compra por el `sku` del pack, único en todo el
+ * catálogo. Antes se resolvía por el nombre (`attributes[0]`, p.ej.
+ * "2 Botes") con findBundleByNameAcrossCatalog, que devolvía la PRIMERA
+ * coincidencia: con dos productos cuyos packs se llaman igual, comprar el del
+ * segundo cobraba el precio del primero y descontaba su stock.
  */
 async function getVerifiedItemPrice(
   db: ReturnType<typeof createServiceClient>,
-  attributes: string[],
+  sku: string,
   quantity: number
 ): Promise<{
   unitPriceEur: number
@@ -72,8 +74,7 @@ async function getVerifiedItemPrice(
   unidadesStock: number
   stockDisponible: number
 } | null> {
-  const bundleName = attributes[0]
-  const resolved = findBundleByNameAcrossCatalog(bundleName)
+  const resolved = findBundleBySku(sku)
   if (!resolved) return null
   const { product, bundle } = resolved
 
@@ -196,10 +197,10 @@ export async function POST(req: NextRequest) {
   const stockAvailableByProduct = new Map<string, number>()
 
   for (const item of items) {
-    const verified = await getVerifiedItemPrice(db, item.attributes, item.quantity)
+    const verified = await getVerifiedItemPrice(db, item.sku, item.quantity)
     if (!verified) {
       return NextResponse.json(
-        { error: `El artículo ${item.id} no coincide con un producto/bundle real disponible. Pago rechazado.` },
+        { error: `El artículo ${item.sku} no coincide con un producto/bundle real disponible. Pago rechazado.` },
         { status: 400 }
       )
     }

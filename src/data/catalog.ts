@@ -207,32 +207,9 @@ export function findBundleById(productId: number, bundleId: number): CatalogBund
   return getProductById(productId)?.bundles.find((b) => b.id === bundleId)
 }
 
-/** Busca un bundle por su id en TODO el catálogo, sin conocer de antemano
- *  el producto — usado por el flujo de "Comprar ahora" (un solo bundle),
- *  que históricamente trataba bundle.id como único entre TODOS los
- *  productos (igual que bundles.id en Supabase). Con un solo producto hoy
- *  no hay colisión posible; si añades un segundo producto, evita repetir
- *  ids de bundle entre productos o esta función devolverá el primero que
- *  encuentre. */
-export function findBundleByIdAcrossCatalog(
-  bundleId: number
-): { product: CatalogProduct; bundle: CatalogBundle } | undefined {
-  for (const product of CATALOG) {
-    const bundle = product.bundles.find((b) => b.id === bundleId)
-    if (bundle) return { product, bundle }
-  }
-  return undefined
-}
-
-/** Busca un bundle por nombre en TODO el catálogo (no solo un producto) —
- *  usado por el checkout de carrito, que solo tiene el nombre del bundle
- *  (p.ej. "2 Botes") como dato fiable del item, no un id de producto. */
-export function findBundleByNameAcrossCatalog(
-  bundleName: string
-): { product: CatalogProduct; bundle: CatalogBundle } | undefined {
-  for (const product of CATALOG) {
-    const bundle = product.bundles.find((b) => b.nombre === bundleName)
-    if (bundle) return { product, bundle }
-  }
-  return undefined
-}
+// findBundleByIdAcrossCatalog y findBundleByNameAcrossCatalog se eliminaron a
+// propósito: ambas devolvían la PRIMERA coincidencia recorriendo el catálogo,
+// sobre claves que se repiten entre productos (el nombre "2 Botes" existe en
+// todos). Con un solo producto no colisionaban; con dos, comprar el pack del
+// segundo cobraba el precio del primero y descontaba su stock. Usa
+// findBundleBySku.
