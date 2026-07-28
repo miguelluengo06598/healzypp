@@ -12,7 +12,6 @@
 // más de un producto daba cifras de otro producto.
 
 import {
-  CATALOG,
   getProductBySlug,
   getBundleDisplayName,
   type CatalogProduct,
@@ -123,13 +122,7 @@ export function formatPriceEur(value: number): string {
   return value.toFixed(2).replace(".", ",");
 }
 
-// ─── Compatibilidad temporal ────────────────────────────────────────────────
-// Solo para que los consumidores migren de uno en uno (pasos 3-5 del diseño).
-// Ambos asumen que solo existe el primer producto del catálogo, que es
-// justamente el fallo que estamos eliminando.
-
-/** @deprecated Usa getBundlesForProduct(productSlug). Se retira en el paso 6. */
-export const BUNDLES: Bundle[] = getBundlesForProduct(CATALOG[0].slug);
-
-/** @deprecated Usa getBaseUnitPriceEur(productSlug). Se retira en el paso 6. */
-export const BASE_UNIT_PRICE_EUR = getBaseUnitPriceEur(CATALOG[0].slug);
+// BUNDLES y BASE_UNIT_PRICE_EUR se eliminaron: derivaban de CATALOG[0], así
+// que cualquier producto que no fuera el primero del catálogo mostraba y
+// cobraba los packs de otro. Usa getBundlesForProduct(slug) y
+// getBaseUnitPriceEur(slug).

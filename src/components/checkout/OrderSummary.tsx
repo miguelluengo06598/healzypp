@@ -1,8 +1,7 @@
 // Importamos desde el módulo compartido (los re-exports de tipo no están disponibles
 // en el scope del fichero — hay que importar explícitamente para usarlos aquí abajo).
-import { BUNDLES, getBundlesForProduct, type Bundle } from "@/lib/bundles";
+import { getBundlesForProduct, type Bundle } from "@/lib/bundles";
 export type { Bundle };
-export { BUNDLES };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
