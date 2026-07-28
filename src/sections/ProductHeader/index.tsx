@@ -9,13 +9,13 @@ import BundleSelection from "@/sections/BundleSelection";
 import DeliveryTimeline from "@/sections/DeliveryTimeline";
 import CheckoutActions from "@/sections/CheckoutActions";
 import { getBundlesForProduct } from "@/lib/bundles";
-import { defaultBenefitBubbles } from "./data";
+import { getBenefitBubbles } from "./data";
 import type { ProductHeaderProps } from "./types";
 
-const ProductHeader = ({
-  data,
-  benefitBubbles = defaultBenefitBubbles,
-}: ProductHeaderProps) => {
+const ProductHeader = ({ data, benefitBubbles }: ProductHeaderProps) => {
+  // Reclamos DEL PRODUCTO de la ficha; la prop sigue permitiendo forzarlos.
+  const bubbles = benefitBubbles ?? getBenefitBubbles(data.slug);
+
   return (
     <>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -49,7 +49,7 @@ const ProductHeader = ({
           )}
           {/* Benefit bubbles — replace description paragraph */}
           <div className="flex flex-wrap gap-2 mb-5">
-            {benefitBubbles.map((benefit) => (
+            {bubbles.map((benefit) => (
               <span
                 key={benefit}
                 className="inline-flex items-center gap-1.5 rounded-full bg-[#F0F4EC] border border-[#487D26]/25 text-black/75 text-xs sm:text-sm font-medium px-3.5 py-1.5"

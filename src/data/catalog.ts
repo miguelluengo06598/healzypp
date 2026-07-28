@@ -66,6 +66,10 @@ export interface CatalogProduct {
   categoria: string
   metaTitle: string
   metaDescription: string
+  /** Reclamos cortos bajo el título de la ficha ("100% veganas", …). Son
+   *  específicos de cada producto: si se omiten, la ficha cae a una lista
+   *  genérica que NO afirma nada sobre el ingrediente principal. */
+  beneficios?: string[]
   bundles: CatalogBundle[]
 }
 
@@ -82,6 +86,14 @@ export const CATALOG: CatalogProduct[] = [
     metaTitle: "Gominolas de Vinagre de Manzana | Natural y Vegano",
     metaDescription:
       "Compra gominolas de vinagre de manzana orgánico. Mejora tu digestión de forma natural. Envío gratis.",
+    beneficios: [
+      "Con vinagre de manzana",
+      "100% veganas",
+      "Sin azúcares añadidos",
+      "Favorece la digestión",
+      "Apoya el bienestar",
+      "Sabor delicioso",
+    ],
     bundles: [
       { sku: "gominolas-vinagre-manzana-x1", id: 1, cantidad: 1, nombre: "1 Bote", precio: 29.99, popular: false },
       { sku: "gominolas-vinagre-manzana-x2", id: 2, cantidad: 2, nombre: "2 Botes", precio: 49.99, precioOriginal: 59.98, popular: true },
@@ -103,6 +115,16 @@ export const CATALOG: CatalogProduct[] = [
     metaTitle: "Gominolas de Jengibre | Natural y Vegano",
     metaDescription:
       "Compra gominolas de jengibre natural. Favorecen la digestión y aportan energía. Envío gratis.",
+    // PLACEHOLDER, igual que la descripción y la imagen: reclamos calcados del
+    // producto de vinagre. Revisar antes de publicar nada de verdad.
+    beneficios: [
+      "Con jengibre natural",
+      "100% veganas",
+      "Sin azúcares añadidos",
+      "Favorece la digestión",
+      "Apoya el bienestar",
+      "Sabor delicioso",
+    ],
     bundles: [
       { sku: "gominolas-jengibre-x1", id: 4, cantidad: 1, nombre: "1 Bote", precio: 24.99, popular: false },
       { sku: "gominolas-jengibre-x2", id: 5, cantidad: 2, nombre: "2 Botes", precio: 44.99, precioOriginal: 49.98, popular: true },
