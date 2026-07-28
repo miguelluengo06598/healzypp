@@ -157,10 +157,13 @@ export default async function ProductPage({
           __html: JSON.stringify(breadcrumbJsonLd).replace(/</g, "\\u003c"),
         }}
       />
-      <ProductPageTracker productId={productData.id} productSlug={slug[0]} />
+      {/* productData.slug, no slug[0]: la ruta es /shop/product/<id>/<slug>,
+          así que slug[0] es el ID. Se estaba mandando "1" como slug del
+          producto a ambos trackers. */}
+      <ProductPageTracker productId={productData.id} productSlug={productData.slug} />
       <ProductMetaTracker
         productId={productData.id}
-        productSlug={slug[0]}
+        productSlug={productData.slug}
         productName={productData.title}
         price={productData.price}
       />
