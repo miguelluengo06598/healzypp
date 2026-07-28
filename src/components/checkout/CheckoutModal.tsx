@@ -175,7 +175,10 @@ function OrderSummaryPanel({ bundle }: { bundle: Bundle }) {
       <div className={cn("px-4 pb-4 pt-3 space-y-2.5", expanded ? "block" : "hidden md:block")}>
         <div className="space-y-1.5 text-sm">
           <div className="flex justify-between text-black/70">
-            <span>Gominolas de vinagre de manzana</span>
+            {/* Nombre del pack que se está comprando de verdad. Antes estaba
+                escrito a mano ("Gominolas de vinagre de manzana"), así que el
+                resumen anunciaba otro producto al comprar el segundo. */}
+            <span>{bundle.displayName}</span>
             <span className="font-medium">{bundle.price}</span>
           </div>
           <div className="flex justify-between text-black/70">
